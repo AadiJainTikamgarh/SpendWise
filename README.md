@@ -1,56 +1,93 @@
-# Welcome to your Expo app 👋
+# SpendWise 💰
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+**SpendWise** is a personal finance and expense tracking Android application built using **React Native**, **Expo SDK 58**, and **Expo Router**.
 
-## Get started
+---
 
-1. Install dependencies
+## 🚀 Getting Started
 
-   ```bash
-   npm install
-   ```
+### 1. Prerequisites
+- **Node.js** (v18 or newer recommended, v24+ supported)
+- **npm** (or `bun` / `pnpm` / `yarn`)
+- **Android Studio** (for local Android Emulator) OR an **Android device** with the **Expo Go** app installed from Google Play.
 
-2. Start the app
-
-   ```bash
-   npx expo start
-   ```
-
-In the output, you'll find options to open the app in a
-
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **src/app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
-
+### 2. Install Dependencies
 ```bash
-npm run reset-project
+npm install
 ```
 
-This command will move the starter code to the **example** directory and create a blank **src/app** directory where you can start developing.
+### 3. Run on Android
 
-### Other setup steps
+#### Option A: Android Emulator or Connected USB Device
+Make sure your Android emulator is running or your Android device is connected via USB debugging:
+```bash
+npm run android
+```
 
-- To set up ESLint for linting, run `npx expo lint`, or follow our guide on ["Using ESLint and Prettier"](https://docs.expo.dev/guides/using-eslint/)
-- If you'd like to set up unit testing, follow our guide on ["Unit Testing with Jest"](https://docs.expo.dev/develop/unit-testing/)
-- Learn more about the TypeScript setup in this template in our guide on ["Using TypeScript"](https://docs.expo.dev/guides/typescript/)
+#### Option B: Scan QR code with Expo Go
+```bash
+npx expo start
+```
+Press `a` in the terminal to launch the Android emulator directly, or scan the QR code with the Expo Go app on your Android phone.
 
-## Learn more
+---
 
-To learn more about developing your project with Expo, look at the following resources:
+## 🛠️ Project Structure
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+```
+SpendWise/
+├── app.json               # Expo configuration (App name, Android package, icons)
+├── eas.json               # EAS Build configuration (APK, AAB, internal testing)
+├── tsconfig.json          # TypeScript configuration
+├── eslint.config.js       # ESLint configuration
+├── assets/                # App icons, splash screens, and images
+└── src/
+    ├── app/               # Expo Router screens (file-based navigation)
+    │   ├── _layout.tsx    # Root layout & tab navigator
+    │   ├── index.tsx      # Home screen (Dashboard)
+    │   └── explore.tsx    # Explore / Details screen
+    ├── components/        # Reusable UI components
+    ├── constants/         # Theme colors, spacing, and constants
+    └── hooks/             # Custom React hooks
+```
 
-## Join the community
+---
 
-Join our community of developers creating universal apps.
+## 📱 Android Build & Deployment
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+This project is pre-configured with `eas.json` for **EAS Build**:
+
+### 1. Install EAS CLI
+```bash
+npm install -g eas-cli
+```
+
+### 2. Log in to Expo
+```bash
+eas login
+```
+
+### 3. Generate a Standalone Android APK (for testing on devices)
+```bash
+eas build --platform android --profile preview
+```
+
+### 4. Build Android App Bundle (AAB for Google Play Store)
+```bash
+eas build --platform android --profile production
+```
+
+---
+
+## 🧪 Quality & Verification Commands
+
+```bash
+# Typecheck TypeScript
+npx tsc --noEmit
+
+# Lint code
+npm run lint
+
+# Check Expo dependencies & config
+npx expo-doctor
+```
