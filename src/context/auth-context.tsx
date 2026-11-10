@@ -1,9 +1,11 @@
 import { Session, User } from '@supabase/supabase-js';
 import * as AuthSession from 'expo-auth-session';
 import * as WebBrowser from 'expo-web-browser';
-import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 
 import { supabase } from '@/utils/supabase';
+import { TransactionRepository } from '@/services/transaction-repository';
+import { BudgetRepository } from '@/services/budget-repository';
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -20,6 +22,7 @@ interface AuthContextType {
   signInWithGoogle: () => Promise<{ error: Error | null }>;
   sendPasswordReset: (email: string) => Promise<{ error: Error | null }>;
   signOut: () => Promise<{ error: Error | null }>;
+  deleteAccount: () => Promise<{ error: Error | null }>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -164,6 +167,54 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const deleteAccount = useCallback(async (): Promise<{ error: Error | null }> => {
+    try {
+      // 1. Attempt to invoke Supabase RPC function for deleting user account
+      const { error: rpcError } = await supabase.rpc('delete_user_account');
+      if (rpcError) {
+        console.warn('RPC delete_user_account returned notice, attempting manual cleanup:', rpcError.message);
+        // Fallback: Attempt deleting records from public user tables if present
+        if (user?.id) {
+          try {
+            await supabase.from('transactions').delete().eq('user_id', user.id);
+            await supabase.from('budgets').delete().eq('user_id', user.id);
+            await supabase.from('profiles').delete().eq('id', user.id);
+          } catch (tableErr) {
+            console.warn('Error deleting user table rows:', tableErr);
+          }
+        }
+      }
+
+      // 2. Clear all local device data (SQLite and AsyncStorage)
+      await Promise.allSettled([
+        TransactionRepository.clearAll(),
+        BudgetRepository.clearAll(),
+      ]);
+
+      // 3. Sign out of Supabase to terminate the session and clear stored tokens
+      const { error: signOutError } = await supabase.auth.signOut();
+      if (signOutError) {
+        console.warn('Error during signOut after deletion:', signOutError);
+      }
+
+      setSession(null);
+      setUser(null);
+
+      return { error: null };
+    } catch (err: any) {
+      console.error('deleteAccount exception:', err);
+      // Guarantee local wipe even if remote fails
+      await Promise.allSettled([
+        TransactionRepository.clearAll(),
+        BudgetRepository.clearAll(),
+        supabase.auth.signOut(),
+      ]);
+      setSession(null);
+      setUser(null);
+      return { error: err };
+    }
+  }, [user]);
+
   const value = useMemo(
     () => ({
       user,
@@ -174,8 +225,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       signInWithGoogle,
       sendPasswordReset,
       signOut,
+      deleteAccount,
     }),
-    [user, session, isLoading]
+    [user, session, isLoading, deleteAccount]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

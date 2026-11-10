@@ -1,10 +1,20 @@
 import { Platform, StyleSheet, Text, type TextProps } from 'react-native';
 
-import { Fonts, ThemeColor } from '@/constants/theme';
+import { FontFamily, Fonts, ThemeColor } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 
 export type ThemedTextProps = TextProps & {
-  type?: 'default' | 'title' | 'small' | 'smallBold' | 'subtitle' | 'link' | 'linkPrimary' | 'code';
+  type?:
+    | 'default'
+    | 'title'
+    | 'small'
+    | 'smallBold'
+    | 'subtitle'
+    | 'link'
+    | 'linkPrimary'
+    | 'code'
+    | 'hero'
+    | 'caption';
   themeColor?: ThemeColor;
 };
 
@@ -15,39 +25,51 @@ export function ThemedText({ style, type = 'default', themeColor, ...rest }: The
 }
 
 const styles = StyleSheet.create({
+  caption: {
+    fontFamily: FontFamily.medium,
+    fontSize: 12,
+    lineHeight: 16,
+  },
   small: {
-    fontSize: 14,
-    lineHeight: 20,
-    fontWeight: 500,
+    fontFamily: FontFamily.regular,
+    fontSize: 13,
+    lineHeight: 18,
   },
   smallBold: {
-    fontSize: 14,
-    lineHeight: 20,
-    fontWeight: 700,
+    fontFamily: FontFamily.semiBold,
+    fontSize: 13,
+    lineHeight: 18,
   },
   default: {
-    fontSize: 16,
-    lineHeight: 24,
-    fontWeight: 500,
-  },
-  title: {
-    fontSize: 48,
-    fontWeight: 600,
-    lineHeight: 52,
+    fontFamily: FontFamily.regular,
+    fontSize: 15,
+    lineHeight: 22,
   },
   subtitle: {
-    fontSize: 32,
-    lineHeight: 44,
-    fontWeight: 600,
+    fontFamily: FontFamily.bold,
+    fontSize: 20,
+    lineHeight: 28,
+  },
+  title: {
+    fontFamily: FontFamily.bold,
+    fontSize: 28,
+    lineHeight: 34,
+  },
+  hero: {
+    fontFamily: FontFamily.extraBold,
+    fontSize: 34,
+    lineHeight: 42,
   },
   link: {
-    lineHeight: 30,
+    fontFamily: FontFamily.medium,
+    lineHeight: 22,
     fontSize: 14,
   },
   linkPrimary: {
-    lineHeight: 30,
+    fontFamily: FontFamily.semiBold,
+    lineHeight: 22,
     fontSize: 14,
-    color: '#3c87f7',
+    color: '#14B896',
   },
   code: {
     fontFamily: Fonts.mono,
