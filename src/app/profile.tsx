@@ -23,6 +23,7 @@ import { useAuth } from '@/context/auth-context';
 import { useFinance } from '@/context/finance-context';
 import { useAppTheme } from '@/hooks/use-theme';
 import { HapticsService } from '@/services/haptics';
+import { generateCSV, generateJSONBackup, shareExport } from '@/services/export-service';
 import { BudgetPeriod } from '@/types/finance';
 import { formatINR, paiseToRupees, parseCurrencyInput } from '@/utils/money';
 
@@ -30,11 +31,12 @@ export default function ProfileScreen() {
   const router = useRouter();
   const { theme, isDark, toggleTheme } = useAppTheme();
   const { user, signOut, deleteAccount } = useAuth();
-  const { dailyBudget, monthlyBudget, saveBudget, resetAllData } = useFinance();
+  const { dailyBudget, monthlyBudget, saveBudget, resetAllData, transactions } = useFinance();
 
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [isDeletingAccount, setIsDeletingAccount] = useState(false);
   const [isResettingApp, setIsResettingApp] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
   const [editingPeriod, setEditingPeriod] = useState<BudgetPeriod | null>(null);
   const [budgetInput, setBudgetInput] = useState('');
   const [isSavingBudget, setIsSavingBudget] = useState(false);
@@ -96,6 +98,57 @@ export default function ProfileScreen() {
             }
           },
         },
+      ]
+    );
+  };
+
+  const handleExportData = () => {
+    HapticsService.light();
+    if (!transactions || transactions.length === 0) {
+      Alert.alert('No Data to Export', 'You have not recorded any transactions yet.');
+      return;
+    }
+
+    Alert.alert(
+      'Export Financial Data',
+      `You have ${transactions.length} recorded transaction(s). Choose your preferred export format:`,
+      [
+        {
+          text: 'Export as CSV (Excel/Sheets)',
+          onPress: async () => {
+            setIsExporting(true);
+            try {
+              const csv = generateCSV(transactions);
+              const dateStr = new Date().toISOString().split('T')[0];
+              await shareExport(csv, `SpendWise_Transactions_${dateStr}.csv`);
+              HapticsService.success();
+            } catch (err: any) {
+              Alert.alert('Export Error', err?.message || 'Could not export CSV');
+            } finally {
+              setIsExporting(false);
+            }
+          },
+        },
+        {
+          text: 'Export as JSON (Full Backup)',
+          onPress: async () => {
+            setIsExporting(true);
+            try {
+              const json = generateJSONBackup(transactions, {
+                daily: dailyBudget,
+                monthly: monthlyBudget,
+              });
+              const dateStr = new Date().toISOString().split('T')[0];
+              await shareExport(json, `SpendWise_Backup_${dateStr}.json`);
+              HapticsService.success();
+            } catch (err: any) {
+              Alert.alert('Export Error', err?.message || 'Could not export JSON');
+            } finally {
+              setIsExporting(false);
+            }
+          },
+        },
+        { text: 'Cancel', style: 'cancel' },
       ]
     );
   };
@@ -283,12 +336,20 @@ export default function ProfileScreen() {
               style={[styles.menuRow, { borderBottomColor: theme.border }]}
               haptic="light"
               scaleTo={0.98}
-              onPress={() => Alert.alert('Data & Export', 'CSV and JSON data export')}>
+              disabled={isExporting}
+              onPress={handleExportData}>
               <View style={[styles.menuIconBox, { backgroundColor: '#0EA5E915' }]}>
-                <Ionicons name="download-outline" size={18} color="#0EA5E9" />
+                {isExporting ? (
+                  <ActivityIndicator size="small" color="#0EA5E9" />
+                ) : (
+                  <Ionicons name="download-outline" size={18} color="#0EA5E9" />
+                )}
               </View>
               <View style={styles.menuTextContainer}>
                 <ThemedText style={styles.menuTitle}>Data & Export</ThemedText>
+                <ThemedText style={styles.menuSubtitle} themeColor="textSecondary">
+                  {transactions?.length ? `${transactions.length} transactions (CSV / JSON)` : 'Export transactions'}
+                </ThemedText>
               </View>
               <Ionicons name="chevron-forward" size={18} color={theme.textSecondary} />
             </ScalePressable>
