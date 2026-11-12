@@ -15,13 +15,23 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import Animated, {
+  useAnimatedStyle,
+  useSharedValue,
+  withSequence,
+  withSpring,
+  withTiming,
+} from 'react-native-reanimated';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { AnimatedSegmentedControl } from '@/components/ui/animated-segmented-control';
+import { ScalePressable } from '@/components/ui/scale-pressable';
 import { EXPENSE_CATEGORIES, getCategoryById, INCOME_CATEGORIES } from '@/constants/categories';
 import { FontFamily, Spacing } from '@/constants/theme';
 import { useFinance } from '@/context/finance-context';
 import { useTheme } from '@/hooks/use-theme';
+import { HapticsService } from '@/services/haptics';
 import { TransactionType } from '@/types/finance';
 import { formatDateLabel, formatTime } from '@/utils/date';
 import { paiseToRupees, parseCurrencyInput } from '@/utils/money';
@@ -66,6 +76,22 @@ export default function TransactionModal() {
   const [showAccountPicker, setShowAccountPicker] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  const amountScale = useSharedValue(1);
+  const amountAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: amountScale.value }],
+  }));
+
+  const handleAmountChange = (text: string) => {
+    setAmountInput(text);
+    if (text.length > 0) {
+      HapticsService.selection();
+      amountScale.value = withSequence(
+        withTiming(1.05, { duration: 60 }),
+        withSpring(1, { damping: 12, stiffness: 350 })
+      );
+    }
+  };
 
   useEffect(() => {
     const onBackPress = () => {
@@ -118,8 +144,10 @@ export default function TransactionModal() {
           paymentMethod: account,
           notes: notes.trim() || undefined,
           date,
+          source: 'manual',
         });
       }
+      HapticsService.success();
       safeGoBack('/');
     } catch (err: any) {
       setErrorMessage(err?.message || 'Failed to save transaction');
@@ -142,6 +170,7 @@ export default function TransactionModal() {
           onPress: async () => {
             setIsSaving(true);
             try {
+              HapticsService.heavy();
               await removeTransaction(existingTx.id);
               safeGoBack('/');
             } catch (err: any) {
@@ -183,73 +212,20 @@ export default function TransactionModal() {
             showsVerticalScrollIndicator={false}>
 
             {/* Segmented Type Switcher */}
-            <View style={[styles.typeSwitcher, { backgroundColor: theme.card, borderColor: theme.border }]}>
-              <Pressable
-                style={[
-                  styles.typeTab,
-                  type === 'expense' && { backgroundColor: theme.primary },
-                ]}
-                onPress={() => handleTypeChange('expense')}>
-                <Ionicons
-                  name="arrow-down"
-                  size={14}
-                  color={type === 'expense' ? '#ffffff' : theme.textSecondary}
-                  style={{ marginRight: 4 }}
-                />
-                <ThemedText
-                  style={[
-                    styles.typeTabText,
-                    { color: type === 'expense' ? '#ffffff' : theme.textSecondary },
-                  ]}>
-                  Expense
-                </ThemedText>
-              </Pressable>
-
-              <Pressable
-                style={[
-                  styles.typeTab,
-                  type === 'income' && { backgroundColor: theme.primary },
-                ]}
-                onPress={() => handleTypeChange('income')}>
-                <Ionicons
-                  name="arrow-up"
-                  size={14}
-                  color={type === 'income' ? '#ffffff' : theme.textSecondary}
-                  style={{ marginRight: 4 }}
-                />
-                <ThemedText
-                  style={[
-                    styles.typeTabText,
-                    { color: type === 'income' ? '#ffffff' : theme.textSecondary },
-                  ]}>
-                  Income
-                </ThemedText>
-              </Pressable>
-
-              <Pressable
-                style={[
-                  styles.typeTab,
-                  type === 'transfer' && { backgroundColor: theme.primary },
-                ]}
-                onPress={() => handleTypeChange('transfer')}>
-                <Ionicons
-                  name="swap-horizontal"
-                  size={14}
-                  color={type === 'transfer' ? '#ffffff' : theme.textSecondary}
-                  style={{ marginRight: 4 }}
-                />
-                <ThemedText
-                  style={[
-                    styles.typeTabText,
-                    { color: type === 'transfer' ? '#ffffff' : theme.textSecondary },
-                  ]}>
-                  Transfer
-                </ThemedText>
-              </Pressable>
-            </View>
+            <AnimatedSegmentedControl<TransactionType>
+              options={[
+                { key: 'expense', label: 'Expense', icon: 'arrow-down', activeColor: theme.expense },
+                { key: 'income', label: 'Income', icon: 'arrow-up', activeColor: theme.income },
+                { key: 'transfer', label: 'Transfer', icon: 'swap-horizontal', activeColor: '#3B82F6' },
+              ]}
+              selectedKey={type}
+              onSelect={handleTypeChange}
+              backgroundColor={theme.card}
+              borderColor={theme.border}
+            />
 
             {/* Giant Hero Amount Input */}
-            <View style={styles.heroAmountContainer}>
+            <Animated.View style={[styles.heroAmountContainer, amountAnimatedStyle]}>
               <ThemedText style={[styles.currencyPrefix, { color: theme.text }]}>₹</ThemedText>
               <TextInput
                 style={[styles.heroAmountInput, { color: theme.text }]}
@@ -257,10 +233,10 @@ export default function TransactionModal() {
                 placeholder="0"
                 placeholderTextColor={theme.textSecondary}
                 value={amountInput}
-                onChangeText={setAmountInput}
+                onChangeText={handleAmountChange}
                 autoFocus={!isEditing}
               />
-            </View>
+            </Animated.View>
 
             {/* Error Message */}
             {errorMessage ? (
@@ -353,7 +329,9 @@ export default function TransactionModal() {
             </View>
 
             {/* Submit Action Button */}
-            <Pressable
+            <ScalePressable
+              scaleTo={0.97}
+              haptic="medium"
               style={[
                 styles.submitBtn,
                 { backgroundColor: theme.primary },
@@ -368,11 +346,13 @@ export default function TransactionModal() {
                   {isEditing ? 'Save Changes' : 'Add Transaction'}
                 </ThemedText>
               )}
-            </Pressable>
+            </ScalePressable>
 
             {/* Delete Option if editing */}
             {isEditing ? (
-              <Pressable
+              <ScalePressable
+                scaleTo={0.97}
+                haptic="heavy"
                 style={[styles.deleteBtn, { borderColor: theme.expense }]}
                 onPress={handleDelete}
                 disabled={isSaving}>
@@ -380,7 +360,7 @@ export default function TransactionModal() {
                 <ThemedText style={[styles.deleteBtnText, { color: theme.expense }]}>
                   Delete Transaction
                 </ThemedText>
-              </Pressable>
+              </ScalePressable>
             ) : null}
           </ScrollView>
 
@@ -401,8 +381,10 @@ export default function TransactionModal() {
 
                 <ScrollView contentContainerStyle={styles.pickerGrid}>
                   {categoriesList.map((cat) => (
-                    <Pressable
+                    <ScalePressable
                       key={cat.id}
+                      scaleTo={0.92}
+                      haptic="selection"
                       style={[
                         styles.pickerItem,
                         cat.id === categoryId && { backgroundColor: `${theme.primary}18`, borderColor: theme.primary },
@@ -417,7 +399,7 @@ export default function TransactionModal() {
                       <ThemedText style={styles.pickerItemName} numberOfLines={1}>
                         {cat.name}
                       </ThemedText>
-                    </Pressable>
+                    </ScalePressable>
                   ))}
                 </ScrollView>
               </View>

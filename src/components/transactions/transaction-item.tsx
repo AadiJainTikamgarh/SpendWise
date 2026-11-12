@@ -1,8 +1,9 @@
 import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
+import { ScalePressable } from '@/components/ui/scale-pressable';
 import { getCategoryById } from '@/constants/categories';
 import { FontFamily, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
@@ -22,14 +23,15 @@ export function TransactionItem({ transaction, onPress, showDate = false }: Tran
   const isIncome = transaction.type === 'income';
 
   return (
-    <Pressable
-      style={({ pressed }) => [
+    <ScalePressable
+      scaleTo={0.98}
+      haptic="light"
+      style={[
         styles.container,
         {
           backgroundColor: theme.card,
           borderColor: theme.border,
         },
-        pressed && styles.pressed,
       ]}
       onPress={onPress}>
       <View style={[styles.iconContainer, { backgroundColor: `${category.color}18` }]}>
@@ -40,9 +42,16 @@ export function TransactionItem({ transaction, onPress, showDate = false }: Tran
         <ThemedText style={styles.title} numberOfLines={1}>
           {transaction.title}
         </ThemedText>
-        <ThemedText type="small" themeColor="textSecondary" numberOfLines={1}>
-          {category.name}
-        </ThemedText>
+        <View style={styles.subtitleRow}>
+          <ThemedText type="small" themeColor="textSecondary" numberOfLines={1}>
+            {category.name}
+          </ThemedText>
+          {transaction.source && (
+            <ThemedText style={styles.sourceBadgeText} themeColor="textSecondary">
+              · {transaction.source === 'sms' ? '📱 SMS' : transaction.source === 'email' ? '✉️ Email' : transaction.source === 'statement' ? '📄 Statement' : '✍️ Manual'}
+            </ThemedText>
+          )}
+        </View>
       </View>
 
       <View style={styles.amountContainer}>
@@ -57,7 +66,7 @@ export function TransactionItem({ transaction, onPress, showDate = false }: Tran
           {formatTime(transaction.date)}
         </ThemedText>
       </View>
-    </Pressable>
+    </ScalePressable>
   );
 }
 
@@ -96,6 +105,15 @@ const styles = StyleSheet.create({
     fontFamily: FontFamily.semiBold,
     fontSize: 15,
     marginBottom: 2,
+  },
+  subtitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  sourceBadgeText: {
+    fontSize: 11,
+    fontFamily: FontFamily.medium,
   },
   amountContainer: {
     alignItems: 'flex-end',

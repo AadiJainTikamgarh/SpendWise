@@ -1,4 +1,5 @@
 export type TransactionType = 'expense' | 'income' | 'transfer' | 'refund';
+export type TransactionSource = 'manual' | 'sms' | 'email' | 'statement';
 
 export interface Transaction {
   id: string;
@@ -10,6 +11,8 @@ export interface Transaction {
   title: string;
   notes?: string;
   paymentMethod?: string;
+  source?: TransactionSource;
+  rawReference?: string;
   createdAt: string;
   updatedAt: string;
 }

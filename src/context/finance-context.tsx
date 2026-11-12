@@ -26,6 +26,7 @@ interface FinanceContextType {
     thresholds?: number[]
   ) => Promise<Budget>;
   refreshData: () => Promise<void>;
+  resetAllData: () => Promise<void>;
 }
 
 const defaultStatus: BudgetStatus = {
@@ -130,6 +131,24 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
     [refreshData]
   );
 
+  const resetAllData = useCallback(async (): Promise<void> => {
+    await Promise.all([
+      TransactionRepository.clearAll(),
+      BudgetRepository.clearAll(),
+    ]);
+
+    setTransactions([]);
+    setTodaySpent(0);
+    setMonthSpent(0);
+    setMonthIncome(0);
+    setDailyBudget(null);
+    setMonthlyBudget(null);
+    setDailyStatus(defaultStatus);
+    setMonthlyStatus(defaultStatus);
+
+    await refreshData();
+  }, [refreshData]);
+
   const value = useMemo(
     () => ({
       transactions,
@@ -146,6 +165,7 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
       removeTransaction,
       saveBudget,
       refreshData,
+      resetAllData,
     }),
     [
       transactions,
@@ -162,6 +182,7 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
       removeTransaction,
       saveBudget,
       refreshData,
+      resetAllData,
     ]
   );
 

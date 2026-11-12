@@ -66,6 +66,12 @@ function RootNavigator() {
         return true;
       }
 
+      // If in feedback, safely return to profile tab
+      if (currentSegment === 'feedback') {
+        safeGoBack('/profile');
+        return true;
+      }
+
       // If in forgot-password, safely return to login
       if (inAuthGroup && (segments as string[])[1] === 'forgot-password') {
         safeGoBack('/(auth)/login');

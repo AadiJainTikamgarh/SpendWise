@@ -8,6 +8,9 @@
       ],
       "@/assets/*": [
         "./assets/*"
+      ],
+      "expo-sms-reader": [
+        "./modules/expo-sms-reader"
       ]
     }
   },

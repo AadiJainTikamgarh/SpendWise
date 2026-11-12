@@ -1,10 +1,10 @@
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
   Modal,
-  Pressable,
   ScrollView,
   StyleSheet,
   Switch,
@@ -15,23 +15,31 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { SmsReviewModal } from '@/components/sms/sms-review-modal';
+import { StatementImportModal } from '@/components/statement/statement-import-modal';
+import { ScalePressable } from '@/components/ui/scale-pressable';
 import { FontFamily, getScrollViewBottomPadding, MaxContentWidth, Spacing } from '@/constants/theme';
 import { useAuth } from '@/context/auth-context';
 import { useFinance } from '@/context/finance-context';
 import { useAppTheme } from '@/hooks/use-theme';
+import { HapticsService } from '@/services/haptics';
 import { BudgetPeriod } from '@/types/finance';
 import { formatINR, paiseToRupees, parseCurrencyInput } from '@/utils/money';
 
 export default function ProfileScreen() {
+  const router = useRouter();
   const { theme, isDark, toggleTheme } = useAppTheme();
   const { user, signOut, deleteAccount } = useAuth();
-  const { dailyBudget, monthlyBudget, saveBudget } = useFinance();
+  const { dailyBudget, monthlyBudget, saveBudget, resetAllData } = useFinance();
 
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [isDeletingAccount, setIsDeletingAccount] = useState(false);
+  const [isResettingApp, setIsResettingApp] = useState(false);
   const [editingPeriod, setEditingPeriod] = useState<BudgetPeriod | null>(null);
   const [budgetInput, setBudgetInput] = useState('');
   const [isSavingBudget, setIsSavingBudget] = useState(false);
+  const [isSmsModalVisible, setIsSmsModalVisible] = useState(false);
+  const [isStatementModalVisible, setIsStatementModalVisible] = useState(false);
 
   const displayName = user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'User';
   const email = user?.email || 'Not signed in';
@@ -56,6 +64,7 @@ export default function ProfileScreen() {
     setIsSavingBudget(true);
     try {
       await saveBudget(editingPeriod, paise);
+      HapticsService.success();
       setEditingPeriod(null);
     } catch (err: any) {
       Alert.alert('Error', err?.message || 'Failed to save budget');
@@ -64,7 +73,35 @@ export default function ProfileScreen() {
     }
   };
 
+  const handleResetApp = () => {
+    HapticsService.heavy();
+    Alert.alert(
+      'Reset App Data',
+      'Are you sure you want to permanently delete all transactions, budgets, and financial records? This action cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Reset Everything',
+          style: 'destructive',
+          onPress: async () => {
+            setIsResettingApp(true);
+            try {
+              await resetAllData();
+              HapticsService.success();
+              Alert.alert('App Reset Complete', 'All transaction data and budgets have been wiped.');
+            } catch (err: any) {
+              Alert.alert('Error', err?.message || 'Failed to reset application data');
+            } finally {
+              setIsResettingApp(false);
+            }
+          },
+        },
+      ]
+    );
+  };
+
   const handleLogout = () => {
+    HapticsService.light();
     Alert.alert('Sign Out', 'Are you sure you want to sign out of SpendWise?', [
       { text: 'Cancel', style: 'cancel' },
       {
@@ -84,6 +121,7 @@ export default function ProfileScreen() {
   };
 
   const handleDeleteAccount = () => {
+    HapticsService.heavy();
     Alert.alert(
       'Delete Account',
       'Are you sure you want to permanently delete your account and all data? This action cannot be undone.',
@@ -118,11 +156,13 @@ export default function ProfileScreen() {
           {/* Header */}
           <View style={styles.header}>
             <ThemedText style={styles.headerTitle}>Profile</ThemedText>
-            <Pressable
+            <ScalePressable
               style={[styles.settingsButton, { backgroundColor: theme.card, borderColor: theme.border }]}
+              haptic="light"
+              scaleTo={0.92}
               onPress={() => Alert.alert('Settings', 'SpendWise Version 1.0.0')}>
               <Ionicons name="settings-outline" size={20} color={theme.text} />
-            </Pressable>
+            </ScalePressable>
           </View>
 
           {/* User Profile Card */}
@@ -160,15 +200,20 @@ export default function ProfileScreen() {
               </View>
               <Switch
                 value={isDark}
-                onValueChange={toggleTheme}
+                onValueChange={() => {
+                  HapticsService.medium();
+                  toggleTheme();
+                }}
                 trackColor={{ false: theme.border, true: theme.primary }}
                 thumbColor="#FFFFFF"
               />
             </View>
 
             {/* Spending Limits / Budgets */}
-            <Pressable
+            <ScalePressable
               style={[styles.menuRow, { borderBottomColor: theme.border }]}
+              haptic="selection"
+              scaleTo={0.98}
               onPress={() => handleOpenBudgetModal('daily')}>
               <View style={[styles.menuIconBox, { backgroundColor: `${theme.primaryDark}15` }]}>
                 <Ionicons name="wallet-outline" size={18} color={theme.primary} />
@@ -180,11 +225,49 @@ export default function ProfileScreen() {
                 </ThemedText>
               </View>
               <Ionicons name="chevron-forward" size={18} color={theme.textSecondary} />
-            </Pressable>
+            </ScalePressable>
+
+            {/* Bank SMS Auto-Tracking */}
+            <ScalePressable
+              style={[styles.menuRow, { borderBottomColor: theme.border }]}
+              haptic="selection"
+              scaleTo={0.98}
+              onPress={() => setIsSmsModalVisible(true)}>
+              <View style={[styles.menuIconBox, { backgroundColor: '#10B98115' }]}>
+                <Ionicons name="chatbox-ellipses-outline" size={18} color="#10B981" />
+              </View>
+              <View style={styles.menuTextContainer}>
+                <ThemedText style={styles.menuTitle}>Bank SMS Auto-Tracking</ThemedText>
+                <ThemedText style={styles.menuSubtitle} themeColor="textSecondary">
+                  Detect UPI & card expenses from SMS
+                </ThemedText>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={theme.textSecondary} />
+            </ScalePressable>
+
+            {/* Statement & Email Receipt Ingestion */}
+            <ScalePressable
+              style={[styles.menuRow, { borderBottomColor: theme.border }]}
+              haptic="selection"
+              scaleTo={0.98}
+              onPress={() => setIsStatementModalVisible(true)}>
+              <View style={[styles.menuIconBox, { backgroundColor: '#6366F115' }]}>
+                <Ionicons name="receipt-outline" size={18} color="#6366F1" />
+              </View>
+              <View style={styles.menuTextContainer}>
+                <ThemedText style={styles.menuTitle}>Statement & Email Ingest</ThemedText>
+                <ThemedText style={styles.menuSubtitle} themeColor="textSecondary">
+                  Import CSV, bank e-statements & receipts
+                </ThemedText>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={theme.textSecondary} />
+            </ScalePressable>
 
             {/* Privacy & Security */}
-            <Pressable
+            <ScalePressable
               style={[styles.menuRow, { borderBottomColor: theme.border }]}
+              haptic="light"
+              scaleTo={0.98}
               onPress={() => Alert.alert('Privacy & Security', 'All financial data is stored locally with secure offline encryption.')}>
               <View style={[styles.menuIconBox, { backgroundColor: '#6366F115' }]}>
                 <Ionicons name="shield-checkmark-outline" size={18} color="#6366F1" />
@@ -193,11 +276,13 @@ export default function ProfileScreen() {
                 <ThemedText style={styles.menuTitle}>Privacy & Security</ThemedText>
               </View>
               <Ionicons name="chevron-forward" size={18} color={theme.textSecondary} />
-            </Pressable>
+            </ScalePressable>
 
             {/* Data & Export */}
-            <Pressable
+            <ScalePressable
               style={[styles.menuRow, { borderBottomColor: theme.border }]}
+              haptic="light"
+              scaleTo={0.98}
               onPress={() => Alert.alert('Data & Export', 'CSV and JSON data export')}>
               <View style={[styles.menuIconBox, { backgroundColor: '#0EA5E915' }]}>
                 <Ionicons name="download-outline" size={18} color="#0EA5E9" />
@@ -206,11 +291,31 @@ export default function ProfileScreen() {
                 <ThemedText style={styles.menuTitle}>Data & Export</ThemedText>
               </View>
               <Ionicons name="chevron-forward" size={18} color={theme.textSecondary} />
-            </Pressable>
+            </ScalePressable>
+
+            {/* Feedback & Feature Request */}
+            <ScalePressable
+              style={[styles.menuRow, { borderBottomColor: theme.border }]}
+              haptic="light"
+              scaleTo={0.98}
+              onPress={() => router.push('/feedback' as any)}>
+              <View style={[styles.menuIconBox, { backgroundColor: '#F59E0B15' }]}>
+                <Ionicons name="chatbubbles-outline" size={18} color="#F59E0B" />
+              </View>
+              <View style={styles.menuTextContainer}>
+                <ThemedText style={styles.menuTitle}>Feedback & Feature Request</ThemedText>
+                <ThemedText style={styles.menuSubtitle} themeColor="textSecondary">
+                  Share ideas, request features & report bugs
+                </ThemedText>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={theme.textSecondary} />
+            </ScalePressable>
 
             {/* About SpendWise */}
-            <Pressable
+            <ScalePressable
               style={styles.menuRow}
+              haptic="light"
+              scaleTo={0.98}
               onPress={() => Alert.alert('About SpendWise', 'SpendWise: Know where your money goes — and take control of where it goes next.')}>
               <View style={[styles.menuIconBox, { backgroundColor: '#8B5CF615' }]}>
                 <Ionicons name="information-circle-outline" size={18} color="#8B5CF6" />
@@ -219,14 +324,41 @@ export default function ProfileScreen() {
                 <ThemedText style={styles.menuTitle}>About SpendWise</ThemedText>
               </View>
               <Ionicons name="chevron-forward" size={18} color={theme.textSecondary} />
-            </Pressable>
+            </ScalePressable>
           </View>
 
+          {/* Reset App Data Card */}
+          <ScalePressable
+            style={[
+              styles.resetAppCard,
+              {
+                backgroundColor: theme.card,
+                borderColor: `${theme.expense}30`,
+              },
+            ]}
+            haptic="heavy"
+            scaleTo={0.97}
+            onPress={handleResetApp}
+            disabled={isResettingApp || isLoggingOut || isDeletingAccount}>
+            {isResettingApp ? (
+              <ActivityIndicator color={theme.expense} />
+            ) : (
+              <>
+                <Ionicons name="refresh-circle-outline" size={20} color={theme.expense} style={{ marginRight: 10 }} />
+                <ThemedText style={[styles.resetAppText, { color: theme.expense }]}>
+                  Reset App Data
+                </ThemedText>
+              </>
+            )}
+          </ScalePressable>
+
           {/* Sign Out Card */}
-          <Pressable
+          <ScalePressable
             style={[styles.signOutCard, { backgroundColor: theme.card, borderColor: theme.border }]}
+            haptic="medium"
+            scaleTo={0.97}
             onPress={handleLogout}
-            disabled={isLoggingOut || isDeletingAccount}>
+            disabled={isLoggingOut || isDeletingAccount || isResettingApp}>
             {isLoggingOut ? (
               <ActivityIndicator color={theme.expense} />
             ) : (
@@ -237,10 +369,10 @@ export default function ProfileScreen() {
                 </ThemedText>
               </>
             )}
-          </Pressable>
+          </ScalePressable>
 
           {/* Delete Account Card (Below Sign Out) */}
-          <Pressable
+          <ScalePressable
             style={[
               styles.deleteAccountCard,
               {
@@ -248,8 +380,10 @@ export default function ProfileScreen() {
                 backgroundColor: isDark ? '#2D1414' : '#FEF2F2',
               },
             ]}
+            haptic="heavy"
+            scaleTo={0.97}
             onPress={handleDeleteAccount}
-            disabled={isDeletingAccount || isLoggingOut}>
+            disabled={isDeletingAccount || isLoggingOut || isResettingApp}>
             {isDeletingAccount ? (
               <ActivityIndicator color={theme.expense} />
             ) : (
@@ -260,7 +394,7 @@ export default function ProfileScreen() {
                 </ThemedText>
               </>
             )}
-          </Pressable>
+          </ScalePressable>
         </ScrollView>
 
         {/* Budget Setting Modal Sheet */}
@@ -289,14 +423,18 @@ export default function ProfileScreen() {
               />
 
               <View style={styles.modalActionsRow}>
-                <Pressable
+                <ScalePressable
                   style={[styles.modalBtn, { borderColor: theme.border, borderWidth: 1 }]}
+                  haptic="light"
+                  scaleTo={0.96}
                   onPress={() => setEditingPeriod(null)}>
                   <ThemedText style={styles.modalBtnText}>Cancel</ThemedText>
-                </Pressable>
+                </ScalePressable>
 
-                <Pressable
+                <ScalePressable
                   style={[styles.modalBtn, { backgroundColor: theme.primary }]}
+                  haptic="medium"
+                  scaleTo={0.96}
                   onPress={handleSaveBudget}
                   disabled={isSavingBudget}>
                   {isSavingBudget ? (
@@ -304,11 +442,17 @@ export default function ProfileScreen() {
                   ) : (
                     <ThemedText style={[styles.modalBtnText, { color: '#ffffff' }]}>Save</ThemedText>
                   )}
-                </Pressable>
+                </ScalePressable>
               </View>
             </View>
           </View>
         </Modal>
+
+        <SmsReviewModal visible={isSmsModalVisible} onClose={() => setIsSmsModalVisible(false)} />
+        <StatementImportModal
+          visible={isStatementModalVisible}
+          onClose={() => setIsStatementModalVisible(false)}
+        />
       </SafeAreaView>
     </ThemedView>
   );
@@ -413,6 +557,19 @@ const styles = StyleSheet.create({
     fontFamily: FontFamily.regular,
     fontSize: 12,
     marginTop: 2,
+  },
+  resetAppCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 15,
+    borderRadius: 16,
+    borderWidth: 1,
+    marginBottom: 12,
+  },
+  resetAppText: {
+    fontFamily: FontFamily.bold,
+    fontSize: 15,
   },
   signOutCard: {
     flexDirection: 'row',

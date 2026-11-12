@@ -14,6 +14,8 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { TransactionItem } from '@/components/transactions/transaction-item';
+import { AnimatedProgressBar } from '@/components/ui/animated-progress-bar';
+import { ScalePressable } from '@/components/ui/scale-pressable';
 import { getCategoryById } from '@/constants/categories';
 import { FontFamily, getScrollViewBottomPadding, MaxContentWidth, Spacing } from '@/constants/theme';
 import { useAuth } from '@/context/auth-context';
@@ -293,17 +295,12 @@ export default function HomeScreen() {
 
                     <View style={styles.catInfo}>
                       <ThemedText style={styles.catName}>{item.category.name}</ThemedText>
-                      <View style={[styles.catProgressBarTrack, { backgroundColor: theme.background }]}>
-                        <View
-                          style={[
-                            styles.catProgressBarFill,
-                            {
-                              width: `${Math.min(100, Math.max(8, item.percentage))}%`,
-                              backgroundColor: theme.primary,
-                            },
-                          ]}
-                        />
-                      </View>
+                      <AnimatedProgressBar
+                        percentage={item.percentage}
+                        color={item.category.color || theme.primary}
+                        backgroundColor={theme.background}
+                        height={6}
+                      />
                     </View>
 
                     <ThemedText style={styles.catPercent}>{item.percentage}%</ThemedText>
@@ -324,9 +321,9 @@ export default function HomeScreen() {
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
               <ThemedText style={styles.sectionTitle}>Recent Transactions</ThemedText>
-              <Pressable onPress={() => router.push('/transactions' as any)}>
+              <ScalePressable haptic="light" onPress={() => router.push('/transactions' as any)}>
                 <ThemedText style={styles.viewAllText}>View All →</ThemedText>
-              </Pressable>
+              </ScalePressable>
             </View>
 
             {isLoading ? (

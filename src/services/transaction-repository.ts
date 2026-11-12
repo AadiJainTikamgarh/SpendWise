@@ -37,6 +37,8 @@ interface RawTransactionRow {
   title: string;
   notes: string | null;
   payment_method: string | null;
+  source: string | null;
+  raw_reference: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -52,6 +54,8 @@ function mapRowToTransaction(row: RawTransactionRow): Transaction {
     title: row.title,
     notes: row.notes || undefined,
     paymentMethod: row.payment_method || undefined,
+    source: (row.source as any) || 'manual',
+    rawReference: row.raw_reference || undefined,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -183,8 +187,8 @@ export const TransactionRepository = {
     }
 
     await db.runAsync(
-      `INSERT INTO transactions (id, user_id, amount, type, category_id, date, title, notes, payment_method, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO transactions (id, user_id, amount, type, category_id, date, title, notes, payment_method, source, raw_reference, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       newTx.id,
       newTx.userId || null,
       newTx.amount,
@@ -194,6 +198,8 @@ export const TransactionRepository = {
       newTx.title,
       newTx.notes || null,
       newTx.paymentMethod || null,
+      newTx.source || 'manual',
+      newTx.rawReference || null,
       newTx.createdAt,
       newTx.updatedAt
     );
@@ -233,6 +239,8 @@ export const TransactionRepository = {
          title = ?,
          notes = ?,
          payment_method = ?,
+         source = ?,
+         raw_reference = ?,
          updated_at = ?
        WHERE id = ?`,
       updated.amount,
@@ -242,6 +250,8 @@ export const TransactionRepository = {
       updated.title,
       updated.notes || null,
       updated.paymentMethod || null,
+      updated.source || 'manual',
+      updated.rawReference || null,
       updated.updatedAt,
       id
     );

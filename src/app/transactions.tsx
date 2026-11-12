@@ -12,7 +12,9 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { SmsReviewModal } from '@/components/sms/sms-review-modal';
 import { TransactionItem } from '@/components/transactions/transaction-item';
+import { ScalePressable } from '@/components/ui/scale-pressable';
 import { FontFamily, getScrollViewBottomPadding, MaxContentWidth, Spacing } from '@/constants/theme';
 import { useFinance } from '@/context/finance-context';
 import { useTheme } from '@/hooks/use-theme';
@@ -36,6 +38,7 @@ export default function TransactionsScreen() {
 
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedType, setSelectedType] = useState<TypeFilter>('all');
+  const [isSmsModalOpen, setIsSmsModalOpen] = useState(false);
 
   const filteredTransactions = useMemo(() => {
     return transactions.filter((tx) => {
@@ -90,11 +93,22 @@ export default function TransactionsScreen() {
           {/* Top Header */}
           <View style={styles.header}>
             <ThemedText style={styles.headerTitle}>Transactions</ThemedText>
-            <Pressable
-              style={[styles.filterButton, { backgroundColor: theme.card, borderColor: theme.border }]}
-              onPress={() => setSelectedType(selectedType === 'all' ? 'expense' : 'all')}>
-              <Ionicons name="options-outline" size={20} color={theme.text} />
-            </Pressable>
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              <ScalePressable
+                scaleTo={0.92}
+                haptic="light"
+                style={[styles.filterButton, { backgroundColor: theme.card, borderColor: theme.border }]}
+                onPress={() => setIsSmsModalOpen(true)}>
+                <Ionicons name="chatbox-ellipses-outline" size={18} color={theme.primary} />
+              </ScalePressable>
+              <ScalePressable
+                scaleTo={0.92}
+                haptic="light"
+                style={[styles.filterButton, { backgroundColor: theme.card, borderColor: theme.border }]}
+                onPress={() => setSelectedType(selectedType === 'all' ? 'expense' : 'all')}>
+                <Ionicons name="options-outline" size={20} color={theme.text} />
+              </ScalePressable>
+            </View>
           </View>
 
           {/* Search Input Bar */}
@@ -120,8 +134,10 @@ export default function TransactionsScreen() {
             {(['all', 'income', 'expense', 'transfer'] as TypeFilter[]).map((type) => {
               const isSelected = selectedType === type;
               return (
-                <Pressable
+                <ScalePressable
                   key={type}
+                  scaleTo={0.93}
+                  haptic="selection"
                   style={[
                     styles.filterPill,
                     isSelected
@@ -136,7 +152,7 @@ export default function TransactionsScreen() {
                     ]}>
                     {type.charAt(0).toUpperCase() + type.slice(1)}
                   </ThemedText>
-                </Pressable>
+                </ScalePressable>
               );
             })}
           </View>
@@ -206,6 +222,7 @@ export default function TransactionsScreen() {
               </View>
             }
           />
+          <SmsReviewModal visible={isSmsModalOpen} onClose={() => setIsSmsModalOpen(false)} />
         </View>
       </SafeAreaView>
     </ThemedView>

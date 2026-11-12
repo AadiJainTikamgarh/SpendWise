@@ -65,6 +65,8 @@ function initDatabase(db: SQLiteDatabase) {
       title TEXT NOT NULL,
       notes TEXT,
       payment_method TEXT,
+      source TEXT DEFAULT 'manual',
+      raw_reference TEXT,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
     );
@@ -79,5 +81,31 @@ function initDatabase(db: SQLiteDatabase) {
       thresholds TEXT NOT NULL,
       updated_at TEXT NOT NULL
     );
+
+    CREATE TABLE IF NOT EXISTS feedback (
+      id TEXT PRIMARY KEY NOT NULL,
+      user_id TEXT,
+      user_email TEXT,
+      category TEXT NOT NULL,
+      rating INTEGER NOT NULL,
+      title TEXT NOT NULL,
+      description TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_feedback_created_at ON feedback(created_at);
   `);
+
+  // Non-destructive migration for existing installations
+  try {
+    const columns = db.getAllSync<{ name: string }>('PRAGMA table_info(transactions);');
+    const columnNames = new Set(columns.map((c) => c.name));
+    if (!columnNames.has('source')) {
+      db.execSync("ALTER TABLE transactions ADD COLUMN source TEXT DEFAULT 'manual';");
+    }
+    if (!columnNames.has('raw_reference')) {
+      db.execSync('ALTER TABLE transactions ADD COLUMN raw_reference TEXT;');
+    }
+  } catch {
+    // Non-fatal fallback
+  }
 }
