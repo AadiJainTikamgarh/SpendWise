@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import {
   FlatList,
   Pressable,
@@ -87,6 +87,16 @@ export default function TransactionsScreen() {
 
   const insets = useSafeAreaInsets();
   const bottomScrollPadding = getScrollViewBottomPadding(insets.bottom);
+
+  const handleOpenTransaction = useCallback(
+    (tx: Transaction) => {
+      router.push({
+        pathname: '/modal/transaction' as any,
+        params: { id: tx.id },
+      });
+    },
+    [router]
+  );
 
   return (
     <ThemedView style={styles.container}>
@@ -211,12 +221,7 @@ export default function TransactionsScreen() {
                   <TransactionItem
                     key={tx.id}
                     transaction={tx}
-                    onPress={() =>
-                      router.push({
-                        pathname: '/modal/transaction' as any,
-                        params: { id: tx.id },
-                      })
-                    }
+                    onPress={handleOpenTransaction}
                   />
                 ))}
               </View>

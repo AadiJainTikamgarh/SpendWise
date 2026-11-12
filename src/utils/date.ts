@@ -40,12 +40,35 @@ export function isSameDay(d1: Date | string, d2: Date | string): boolean {
   );
 }
 
+// Hoisted Intl formatters for high performance across list items and renders
+const timeFormatter = new Intl.DateTimeFormat('en-IN', {
+  hour: 'numeric',
+  minute: '2-digit',
+  hour12: true,
+});
+
+const monthYearFormatter = new Intl.DateTimeFormat('en-IN', {
+  month: 'long',
+  year: 'numeric',
+});
+
+const sameYearDateFormatter = new Intl.DateTimeFormat('en-IN', {
+  day: 'numeric',
+  month: 'short',
+});
+
+const diffYearDateFormatter = new Intl.DateTimeFormat('en-IN', {
+  day: 'numeric',
+  month: 'short',
+  year: 'numeric',
+});
+
 export function formatDateLabel(isoString: string): string {
   const date = parseDate(isoString);
   const now = new Date();
 
   const day = date.getDate();
-  const month = date.toLocaleDateString('en-IN', { month: 'short' });
+  const month = sameYearDateFormatter.format(date).split(' ')[1] || 'date';
 
   if (isSameDay(date, now)) {
     return `Today, ${day} ${month}`;
@@ -57,28 +80,17 @@ export function formatDateLabel(isoString: string): string {
     return `Yesterday, ${day} ${month}`;
   }
 
-  const options: Intl.DateTimeFormatOptions = {
-    day: 'numeric',
-    month: 'short',
-    year: date.getFullYear() !== now.getFullYear() ? 'numeric' : undefined,
-  };
-  return date.toLocaleDateString('en-IN', options);
+  const formatter = date.getFullYear() !== now.getFullYear() ? diffYearDateFormatter : sameYearDateFormatter;
+  return formatter.format(date);
 }
 
 export function formatTime(isoString: string): string {
   const date = parseDate(isoString);
-  return date.toLocaleTimeString('en-IN', {
-    hour: 'numeric',
-    minute: '2-digit',
-    hour12: true,
-  });
+  return timeFormatter.format(date);
 }
 
 export function formatMonthYear(date: Date): string {
-  return date.toLocaleDateString('en-IN', {
-    month: 'long',
-    year: 'numeric',
-  });
+  return monthYearFormatter.format(date);
 }
 
 export function getDaysInMonthGrid(year: number, month: number, startOnSunday: boolean = true): (Date | null)[] {

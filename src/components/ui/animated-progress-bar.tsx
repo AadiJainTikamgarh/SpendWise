@@ -29,7 +29,7 @@ export function AnimatedProgressBar({
   }, [percentage, progress]);
 
   const animatedStyle = useAnimatedStyle(() => ({
-    width: `${progress.value}%`,
+    transform: [{ scaleX: progress.value / 100 }],
   }));
 
   return (
@@ -63,6 +63,8 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   fill: {
+    width: '100%',
     height: '100%',
+    transformOrigin: 'left',
   },
 });

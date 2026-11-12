@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   FlatList,
   Pressable,
@@ -94,6 +94,16 @@ export default function CalendarScreen() {
 
   const insets = useSafeAreaInsets();
   const bottomScrollPadding = getScrollViewBottomPadding(insets.bottom);
+
+  const handleOpenTransaction = useCallback(
+    (tx: any) => {
+      router.push({
+        pathname: '/modal/transaction' as any,
+        params: { id: tx.id },
+      });
+    },
+    [router]
+  );
 
   return (
     <ThemedView style={styles.container}>
@@ -199,12 +209,7 @@ export default function CalendarScreen() {
             renderItem={({ item }) => (
               <TransactionItem
                 transaction={item}
-                onPress={() =>
-                  router.push({
-                    pathname: '/modal/transaction' as any,
-                    params: { id: item.id },
-                  })
-                }
+                onPress={handleOpenTransaction}
               />
             )}
             ListEmptyComponent={

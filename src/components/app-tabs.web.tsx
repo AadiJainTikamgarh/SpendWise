@@ -68,14 +68,14 @@ export function TabButton({
       <ThemedView
         type={isFocused ? 'backgroundSelected' : 'backgroundElement'}
         style={[styles.tabButtonView, isFocused && styles.tabButtonActive]}>
-        {iconName && (
+        {iconName ? (
           <Ionicons
             name={iconName}
             size={16}
             color={iconColor}
             style={styles.tabIcon}
           />
-        )}
+        ) : null}
         <ThemedText
           type="small"
           style={[

@@ -6,6 +6,17 @@ export function rupeesToPaise(rupees: number): number {
   return Math.round((rupees || 0) * 100);
 }
 
+// Hoisted formatters to avoid expensive Intl instantiation on every render/list item
+const inrWithDecimals = new Intl.NumberFormat('en-IN', {
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+});
+
+const inrWithoutDecimals = new Intl.NumberFormat('en-IN', {
+  minimumFractionDigits: 0,
+  maximumFractionDigits: 2,
+});
+
 export function formatINR(
   paise: number,
   options?: {
@@ -18,11 +29,8 @@ export function formatINR(
   const isNegative = (paise || 0) < 0;
 
   const showDecimals = options?.showDecimals ?? rupees % 1 !== 0;
-
-  const formattedNumber = new Intl.NumberFormat('en-IN', {
-    minimumFractionDigits: showDecimals ? 2 : 0,
-    maximumFractionDigits: 2,
-  }).format(rupees);
+  const formatter = showDecimals ? inrWithDecimals : inrWithoutDecimals;
+  const formattedNumber = formatter.format(rupees);
 
   let prefix = '₹';
   if (options?.showSign) {

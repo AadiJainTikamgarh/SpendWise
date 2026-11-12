@@ -86,7 +86,7 @@ export function AnimatedSegmentedControl<T extends string = string>({
           borderColor,
         },
       ]}>
-      {segmentWidth > 0 && (
+      {segmentWidth > 0 ? (
         <Animated.View
           style={[
             styles.activePill,
@@ -94,7 +94,7 @@ export function AnimatedSegmentedControl<T extends string = string>({
             pillAnimatedStyle,
           ]}
         />
-      )}
+      ) : null}
 
       {options.map((option, index) => {
         const isSelected = option.key === selectedKey;
@@ -103,14 +103,14 @@ export function AnimatedSegmentedControl<T extends string = string>({
             key={option.key}
             style={styles.tab}
             onPress={() => handlePress(option.key, index)}>
-            {option.icon && (
+            {option.icon ? (
               <Ionicons
                 name={option.icon}
                 size={14}
                 color={isSelected ? '#ffffff' : '#94A3B8'}
                 style={{ marginRight: 5 }}
               />
-            )}
+            ) : null}
             <ThemedText
               style={[
                 styles.tabText,

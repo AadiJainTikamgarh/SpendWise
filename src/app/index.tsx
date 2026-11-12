@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Modal,
@@ -63,6 +63,16 @@ export default function HomeScreen() {
 
   const insets = useSafeAreaInsets();
   const bottomScrollPadding = getScrollViewBottomPadding(insets.bottom);
+
+  const handleOpenTransaction = useCallback(
+    (tx: any) => {
+      router.push({
+        pathname: '/modal/transaction' as any,
+        params: { id: tx.id },
+      });
+    },
+    [router]
+  );
 
   // Time-of-day greeting
   const greeting = useMemo(() => {
@@ -448,12 +458,7 @@ export default function HomeScreen() {
                 <TransactionItem
                   key={tx.id}
                   transaction={tx}
-                  onPress={() =>
-                    router.push({
-                      pathname: '/modal/transaction' as any,
-                      params: { id: tx.id },
-                    })
-                  }
+                  onPress={handleOpenTransaction}
                 />
               ))
             ) : (

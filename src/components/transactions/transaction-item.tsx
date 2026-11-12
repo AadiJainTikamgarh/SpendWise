@@ -13,62 +13,78 @@ import { formatINR } from '@/utils/money';
 
 interface TransactionItemProps {
   transaction: Transaction;
-  onPress?: () => void;
+  onPress?: ((tx: Transaction) => void) | (() => void);
   showDate?: boolean;
 }
 
-export function TransactionItem({ transaction, onPress, showDate = false }: TransactionItemProps) {
-  const theme = useTheme();
-  const category = getCategoryById(transaction.categoryId);
-  const isIncome = transaction.type === 'income';
+export const TransactionItem = React.memo(
+  function TransactionItem({ transaction, onPress, showDate = false }: TransactionItemProps) {
+    const theme = useTheme();
+    const category = getCategoryById(transaction.categoryId);
+    const isIncome = transaction.type === 'income';
 
-  return (
-    <ScalePressable
-      scaleTo={0.98}
-      haptic="light"
-      style={[
-        styles.container,
-        {
-          backgroundColor: theme.card,
-          borderColor: theme.border,
-        },
-      ]}
-      onPress={onPress}>
-      <View style={[styles.iconContainer, { backgroundColor: `${category.color}18` }]}>
-        <Ionicons name={category.icon as any} size={22} color={category.color} />
-      </View>
+    const handlePress = React.useCallback(() => {
+      if (onPress) {
+        (onPress as any)(transaction);
+      }
+    }, [onPress, transaction]);
 
-      <View style={styles.detailsContainer}>
-        <ThemedText style={styles.title} numberOfLines={1}>
-          {transaction.title}
-        </ThemedText>
-        <View style={styles.subtitleRow}>
-          <ThemedText type="small" themeColor="textSecondary" numberOfLines={1}>
-            {category.name}
-          </ThemedText>
-          {transaction.source && (
-            <ThemedText style={styles.sourceBadgeText} themeColor="textSecondary">
-              · {transaction.source === 'sms' ? '📱 SMS' : transaction.source === 'email' ? '✉️ Email' : transaction.source === 'statement' ? '📄 Statement' : '✍️ Manual'}
-            </ThemedText>
-          )}
+    return (
+      <ScalePressable
+        scaleTo={0.98}
+        haptic="light"
+        style={[
+          styles.container,
+          {
+            backgroundColor: theme.card,
+            borderColor: theme.border,
+          },
+        ]}
+        onPress={onPress ? handlePress : undefined}>
+        <View style={[styles.iconContainer, { backgroundColor: `${category.color}18` }]}>
+          <Ionicons name={category.icon as any} size={22} color={category.color} />
         </View>
-      </View>
 
-      <View style={styles.amountContainer}>
-        <ThemedText
-          style={[
-            styles.amount,
-            { color: isIncome ? theme.income : theme.expense },
-          ]}>
-          {isIncome ? `+ ${formatINR(transaction.amount)}` : `- ${formatINR(transaction.amount)}`}
-        </ThemedText>
-        <ThemedText type="caption" themeColor="textSecondary">
-          {formatTime(transaction.date)}
-        </ThemedText>
-      </View>
-    </ScalePressable>
-  );
-}
+        <View style={styles.detailsContainer}>
+          <ThemedText style={styles.title} numberOfLines={1}>
+            {transaction.title}
+          </ThemedText>
+          <View style={styles.subtitleRow}>
+            <ThemedText type="small" themeColor="textSecondary" numberOfLines={1}>
+              {category.name}
+            </ThemedText>
+            {transaction.source && (
+              <ThemedText style={styles.sourceBadgeText} themeColor="textSecondary">
+                · {transaction.source === 'sms' ? '📱 SMS' : transaction.source === 'email' ? '✉️ Email' : transaction.source === 'statement' ? '📄 Statement' : '✍️ Manual'}
+              </ThemedText>
+            )}
+          </View>
+        </View>
+
+        <View style={styles.amountContainer}>
+          <ThemedText
+            style={[
+              styles.amount,
+              { color: isIncome ? theme.income : theme.expense },
+            ]}>
+            {isIncome ? `+ ${formatINR(transaction.amount)}` : `- ${formatINR(transaction.amount)}`}
+          </ThemedText>
+          <ThemedText type="caption" themeColor="textSecondary">
+            {formatTime(transaction.date)}
+          </ThemedText>
+        </View>
+      </ScalePressable>
+    );
+  },
+  (prev, next) =>
+    prev.transaction.id === next.transaction.id &&
+    prev.transaction.updatedAt === next.transaction.updatedAt &&
+    prev.transaction.amount === next.transaction.amount &&
+    prev.transaction.title === next.transaction.title &&
+    prev.transaction.categoryId === next.transaction.categoryId &&
+    prev.showDate === next.showDate &&
+    prev.onPress === next.onPress
+);
 
 const styles = StyleSheet.create({
   container: {
