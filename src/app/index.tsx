@@ -3,10 +3,12 @@ import { useRouter } from 'expo-router';
 import React, { useMemo, useState } from 'react';
 import {
   ActivityIndicator,
+  Modal,
   Pressable,
   RefreshControl,
   ScrollView,
   StyleSheet,
+  TextInput,
   View,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -21,7 +23,7 @@ import { FontFamily, getScrollViewBottomPadding, MaxContentWidth, Spacing } from
 import { useAuth } from '@/context/auth-context';
 import { useFinance } from '@/context/finance-context';
 import { useTheme } from '@/hooks/use-theme';
-import { formatINR } from '@/utils/money';
+import { formatINR, paiseToRupees, parseCurrencyInput, rupeesToPaise } from '@/utils/money';
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -32,11 +34,17 @@ export default function HomeScreen() {
     isLoading,
     monthSpent,
     monthIncome,
+    monthlyBudget,
+    monthlyStatus,
+    saveBudget,
     refreshData,
   } = useFinance();
 
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [showBalance, setShowBalance] = useState(true);
+  const [isBudgetModalOpen, setIsBudgetModalOpen] = useState(false);
+  const [budgetInputValue, setBudgetInputValue] = useState('');
+  const [isSavingBudget, setIsSavingBudget] = useState(false);
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
@@ -136,6 +144,36 @@ export default function HomeScreen() {
 
   const recentTransactions = transactions.slice(0, 3);
 
+  const handleOpenBudgetModal = () => {
+    setBudgetInputValue(
+      monthlyBudget && monthlyBudget.amount > 0
+        ? String(paiseToRupees(monthlyBudget.amount))
+        : ''
+    );
+    setIsBudgetModalOpen(true);
+  };
+
+  const handleSaveBudget = async (presetRupees?: number) => {
+    setIsSavingBudget(true);
+    try {
+      const amountInPaise = presetRupees !== undefined
+        ? rupeesToPaise(presetRupees)
+        : parseCurrencyInput(budgetInputValue);
+      await saveBudget('monthly', amountInPaise);
+      setIsBudgetModalOpen(false);
+    } catch (e) {
+      console.error('Error saving budget:', e);
+    } finally {
+      setIsSavingBudget(false);
+    }
+  };
+
+  const budgetColor = useMemo(() => {
+    if (monthlyStatus.isExceeded) return '#EF4444';
+    if (monthlyStatus.percentage >= 80) return '#F59E0B';
+    return '#10B981';
+  }, [monthlyStatus.isExceeded, monthlyStatus.percentage]);
+
   return (
     <ThemedView style={styles.container}>
       <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
@@ -217,6 +255,83 @@ export default function HomeScreen() {
                 </ThemedText>
               </View>
             </View>
+          </View>
+
+          {/* Monthly Budget Card */}
+          <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
+            <View style={styles.cardHeader}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <View
+                  style={{
+                    width: 32,
+                    height: 32,
+                    borderRadius: 10,
+                    backgroundColor: `${budgetColor}18`,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}>
+                  <Ionicons
+                    name={monthlyStatus.isExceeded ? 'alert-circle' : 'flag-outline'}
+                    size={18}
+                    color={budgetColor}
+                  />
+                </View>
+                <View>
+                  <ThemedText style={styles.cardTitle}>Monthly Budget</ThemedText>
+                  <ThemedText style={styles.budgetSubtitle} themeColor="textSecondary">
+                    {monthlyBudget && monthlyBudget.amount > 0
+                      ? `${formatINR(monthlyStatus.spent)} of ${formatINR(monthlyStatus.budget)}`
+                      : 'No spending limit set'}
+                  </ThemedText>
+                </View>
+              </View>
+
+              <ScalePressable
+                scaleTo={0.92}
+                haptic="light"
+                onPress={handleOpenBudgetModal}
+                style={[
+                  styles.budgetActionButton,
+                  { backgroundColor: `${theme.primary}12`, borderColor: `${theme.primary}30` },
+                ]}>
+                <Ionicons
+                  name={monthlyBudget && monthlyBudget.amount > 0 ? 'pencil-outline' : 'add-outline'}
+                  size={14}
+                  color={theme.primary}
+                />
+                <ThemedText style={[styles.budgetActionText, { color: theme.primary }]}>
+                  {monthlyBudget && monthlyBudget.amount > 0 ? 'Edit' : 'Set Budget'}
+                </ThemedText>
+              </ScalePressable>
+            </View>
+
+            {monthlyBudget && monthlyBudget.amount > 0 ? (
+              <View style={{ marginTop: 4 }}>
+                <AnimatedProgressBar
+                  percentage={monthlyStatus.percentage}
+                  color={budgetColor}
+                  height={8}
+                />
+                <View style={styles.budgetFooterRow}>
+                  <ThemedText style={styles.budgetFooterLabel} themeColor="textSecondary">
+                    {monthlyStatus.percentage}% used
+                  </ThemedText>
+                  <ThemedText
+                    style={[
+                      styles.budgetFooterStatus,
+                      { color: monthlyStatus.isExceeded ? '#EF4444' : theme.textSecondary },
+                    ]}>
+                    {monthlyStatus.isExceeded
+                      ? `${formatINR(monthlyStatus.spent - monthlyStatus.budget)} over limit!`
+                      : `${formatINR(monthlyStatus.remaining)} remaining`}
+                  </ThemedText>
+                </View>
+              </View>
+            ) : (
+              <ThemedText style={styles.budgetPromptText} themeColor="textSecondary">
+                Set a monthly spending limit to receive alert notifications and avoid overspending.
+              </ThemedText>
+            )}
           </View>
 
           {/* Monthly Spending Bar Chart */}
@@ -352,6 +467,93 @@ export default function HomeScreen() {
             )}
           </View>
         </ScrollView>
+
+        {/* Set Budget Modal */}
+        <Modal
+          visible={isBudgetModalOpen}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setIsBudgetModalOpen(false)}>
+          <View style={styles.modalOverlay}>
+            <View style={[styles.modalCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
+              {/* Modal Header */}
+              <View style={styles.modalHeader}>
+                <View>
+                  <ThemedText style={styles.modalTitle}>Set Monthly Budget</ThemedText>
+                  <ThemedText style={styles.modalSubtitle} themeColor="textSecondary">
+                    Choose a spending limit for this month
+                  </ThemedText>
+                </View>
+                <Pressable
+                  hitSlop={10}
+                  onPress={() => setIsBudgetModalOpen(false)}
+                  style={[styles.modalCloseButton, { backgroundColor: theme.background }]}>
+                  <Ionicons name="close" size={18} color={theme.text} />
+                </Pressable>
+              </View>
+
+              {/* Amount Input */}
+              <View style={[styles.modalInputWrapper, { backgroundColor: theme.background, borderColor: theme.border }]}>
+                <ThemedText style={[styles.currencyPrefix, { color: theme.primary }]}>₹</ThemedText>
+                <TextInput
+                  style={[styles.modalInput, { color: theme.text }]}
+                  placeholder="25,000"
+                  placeholderTextColor={theme.textSecondary}
+                  keyboardType="numeric"
+                  value={budgetInputValue}
+                  onChangeText={setBudgetInputValue}
+                  autoFocus
+                />
+              </View>
+
+              {/* Quick Preset Buttons */}
+              <ThemedText style={styles.presetsLabel} themeColor="textSecondary">
+                Quick Presets:
+              </ThemedText>
+              <View style={styles.presetsRow}>
+                {[15000, 25000, 50000, 75000].map((preset) => (
+                  <ScalePressable
+                    key={preset}
+                    scaleTo={0.93}
+                    haptic="selection"
+                    onPress={() => handleSaveBudget(preset)}
+                    style={[
+                      styles.presetChip,
+                      { backgroundColor: theme.background, borderColor: theme.border },
+                    ]}>
+                    <ThemedText style={[styles.presetChipText, { color: theme.text }]}>
+                      ₹{(preset / 1000).toLocaleString('en-IN')}k
+                    </ThemedText>
+                  </ScalePressable>
+                ))}
+              </View>
+
+              {/* Modal Actions */}
+              <View style={styles.modalActionsRow}>
+                <ScalePressable
+                  scaleTo={0.95}
+                  haptic="light"
+                  onPress={() => setIsBudgetModalOpen(false)}
+                  style={[styles.modalCancelBtn, { borderColor: theme.border }]}>
+                  <ThemedText style={styles.modalCancelText}>Cancel</ThemedText>
+                </ScalePressable>
+
+                <ScalePressable
+                  scaleTo={0.95}
+                  haptic="medium"
+                  onPress={() => handleSaveBudget()}
+                  disabled={isSavingBudget}
+                  style={[styles.modalSaveBtn, { backgroundColor: theme.primary }]}>
+                  {isSavingBudget ? (
+                    <ActivityIndicator size="small" color="#FFFFFF" />
+                  ) : (
+                    <ThemedText style={styles.modalSaveText}>Save Budget</ThemedText>
+                  )}
+                </ScalePressable>
+              </View>
+            </View>
+          </View>
+        </Modal>
       </SafeAreaView>
     </ThemedView>
   );
@@ -655,5 +857,152 @@ const styles = StyleSheet.create({
     fontFamily: FontFamily.regular,
     fontSize: 13,
     textAlign: 'center',
+  },
+  budgetSubtitle: {
+    fontFamily: FontFamily.regular,
+    fontSize: 12,
+    marginTop: 2,
+  },
+  budgetActionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 14,
+    borderWidth: 1,
+  },
+  budgetActionText: {
+    fontFamily: FontFamily.semiBold,
+    fontSize: 12,
+  },
+  budgetFooterRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  budgetFooterLabel: {
+    fontFamily: FontFamily.medium,
+    fontSize: 12,
+  },
+  budgetFooterStatus: {
+    fontFamily: FontFamily.semiBold,
+    fontSize: 12,
+  },
+  budgetPromptText: {
+    fontFamily: FontFamily.regular,
+    fontSize: 13,
+    marginTop: 4,
+    lineHeight: 18,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  modalCard: {
+    width: '100%',
+    maxWidth: 420,
+    borderRadius: 24,
+    padding: 20,
+    borderWidth: 1,
+    shadowColor: '#000',
+    shadowOpacity: 0.15,
+    shadowRadius: 10,
+    elevation: 6,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 16,
+  },
+  modalTitle: {
+    fontFamily: FontFamily.bold,
+    fontSize: 18,
+  },
+  modalSubtitle: {
+    fontFamily: FontFamily.regular,
+    fontSize: 13,
+    marginTop: 2,
+  },
+  modalCloseButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalInputWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 14,
+    borderWidth: 1,
+    paddingHorizontal: 14,
+    height: 52,
+    marginBottom: 16,
+  },
+  currencyPrefix: {
+    fontFamily: FontFamily.bold,
+    fontSize: 22,
+    marginRight: 6,
+  },
+  modalInput: {
+    flex: 1,
+    fontFamily: FontFamily.semiBold,
+    fontSize: 20,
+    padding: 0,
+  },
+  presetsLabel: {
+    fontFamily: FontFamily.medium,
+    fontSize: 12,
+    marginBottom: 8,
+  },
+  presetsRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 20,
+  },
+  presetChip: {
+    flex: 1,
+    paddingVertical: 8,
+    borderRadius: 12,
+    borderWidth: 1,
+    alignItems: 'center',
+  },
+  presetChipText: {
+    fontFamily: FontFamily.semiBold,
+    fontSize: 12,
+  },
+  modalActionsRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  modalCancelBtn: {
+    flex: 1,
+    height: 46,
+    borderRadius: 14,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalCancelText: {
+    fontFamily: FontFamily.semiBold,
+    fontSize: 14,
+  },
+  modalSaveBtn: {
+    flex: 1,
+    height: 46,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalSaveText: {
+    fontFamily: FontFamily.bold,
+    fontSize: 14,
+    color: '#FFFFFF',
   },
 });
