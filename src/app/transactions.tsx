@@ -13,6 +13,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { SmsReviewModal } from '@/components/sms/sms-review-modal';
+import { StatementImportModal } from '@/components/statement/statement-import-modal';
 import { TransactionItem } from '@/components/transactions/transaction-item';
 import { ScalePressable } from '@/components/ui/scale-pressable';
 import { FontFamily, getScrollViewBottomPadding, MaxContentWidth, Spacing } from '@/constants/theme';
@@ -39,6 +40,7 @@ export default function TransactionsScreen() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedType, setSelectedType] = useState<TypeFilter>('all');
   const [isSmsModalOpen, setIsSmsModalOpen] = useState(false);
+  const [isStatementModalOpen, setIsStatementModalOpen] = useState(false);
 
   const filteredTransactions = useMemo(() => {
     return transactions.filter((tx) => {
@@ -94,6 +96,13 @@ export default function TransactionsScreen() {
           <View style={styles.header}>
             <ThemedText style={styles.headerTitle}>Transactions</ThemedText>
             <View style={{ flexDirection: 'row', gap: 8 }}>
+              <ScalePressable
+                scaleTo={0.92}
+                haptic="light"
+                style={[styles.filterButton, { backgroundColor: theme.card, borderColor: theme.border }]}
+                onPress={() => setIsStatementModalOpen(true)}>
+                <Ionicons name="receipt-outline" size={18} color={theme.primary} />
+              </ScalePressable>
               <ScalePressable
                 scaleTo={0.92}
                 haptic="light"
@@ -223,6 +232,10 @@ export default function TransactionsScreen() {
             }
           />
           <SmsReviewModal visible={isSmsModalOpen} onClose={() => setIsSmsModalOpen(false)} />
+          <StatementImportModal
+            visible={isStatementModalOpen}
+            onClose={() => setIsStatementModalOpen(false)}
+          />
         </View>
       </SafeAreaView>
     </ThemedView>
