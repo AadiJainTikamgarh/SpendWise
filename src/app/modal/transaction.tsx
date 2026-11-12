@@ -33,7 +33,7 @@ import { useFinance } from '@/context/finance-context';
 import { useTheme } from '@/hooks/use-theme';
 import { HapticsService } from '@/services/haptics';
 import { TransactionType } from '@/types/finance';
-import { formatDateLabel, formatTime } from '@/utils/date';
+import { formatDateLabel, formatTime, isSameDay } from '@/utils/date';
 import { paiseToRupees, parseCurrencyInput } from '@/utils/money';
 import { safeGoBack } from '@/utils/navigation';
 
@@ -44,6 +44,23 @@ const PAYMENT_ACCOUNTS = [
   'Credit Card',
   'Bank Transfer',
 ];
+
+const getAccountIcon = (acc: string) => {
+  switch (acc) {
+    case 'Cash':
+      return 'cash-outline';
+    case 'UPI / Online':
+      return 'phone-portrait-outline';
+    case 'Debit Card':
+      return 'card-outline';
+    case 'Credit Card':
+      return 'card';
+    case 'Bank Transfer':
+      return 'business-outline';
+    default:
+      return 'wallet-outline';
+  }
+};
 
 export default function TransactionModal() {
   const theme = useTheme();
@@ -68,12 +85,13 @@ export default function TransactionModal() {
   const [categoryId, setCategoryId] = useState(
     existingTx?.categoryId || (type === 'expense' ? EXPENSE_CATEGORIES[0].id : INCOME_CATEGORIES[0].id)
   );
-  const [account, setAccount] = useState(existingTx?.paymentMethod || 'UPI / Online');
+  const [account, setAccount] = useState(existingTx?.paymentMethod || 'Cash');
   const [notes, setNotes] = useState(existingTx?.notes || '');
-  const [date] = useState(existingTx?.date || params.date || new Date().toISOString());
+  const [date, setDate] = useState(existingTx?.date || params.date || new Date().toISOString());
 
   const [showCategoryPicker, setShowCategoryPicker] = useState(false);
   const [showAccountPicker, setShowAccountPicker] = useState(false);
+  const [showDatePicker, setShowDatePicker] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -119,10 +137,11 @@ export default function TransactionModal() {
       return;
     }
 
-    if (!title.trim()) {
-      setErrorMessage('Please enter a description / merchant title');
-      return;
-    }
+    const currentCat = getCategoryById(categoryId);
+    const effectiveTitle =
+      title.trim() ||
+      currentCat?.name ||
+      (account === 'Cash' ? 'Cash Spend' : type === 'expense' ? 'General Expense' : 'Income');
 
     setIsSaving(true);
     try {
@@ -131,7 +150,7 @@ export default function TransactionModal() {
           amount: amountInPaise,
           type,
           categoryId,
-          title: title.trim(),
+          title: effectiveTitle,
           paymentMethod: account,
           notes: notes.trim() || undefined,
         });
@@ -140,7 +159,7 @@ export default function TransactionModal() {
           amount: amountInPaise,
           type,
           categoryId,
-          title: title.trim(),
+          title: effectiveTitle,
           paymentMethod: account,
           notes: notes.trim() || undefined,
           date,
@@ -276,7 +295,7 @@ export default function TransactionModal() {
                   <ThemedText style={styles.rowLabel}>Description</ThemedText>
                   <TextInput
                     style={[styles.rowInput, { color: theme.text }]}
-                    placeholder="e.g. Groceries, Coffee, Salary"
+                    placeholder={`e.g. ${selectedCategory.name} (optional)`}
                     placeholderTextColor={theme.textSecondary}
                     value={title}
                     onChangeText={setTitle}
@@ -285,7 +304,9 @@ export default function TransactionModal() {
               </View>
 
               {/* Date & Time Row */}
-              <View style={[styles.formRow, { borderBottomColor: theme.border }]}>
+              <Pressable
+                style={[styles.formRow, { borderBottomColor: theme.border }]}
+                onPress={() => setShowDatePicker(true)}>
                 <View style={[styles.rowIconBox, { backgroundColor: `${theme.accent}15` }]}>
                   <Ionicons name="calendar-outline" size={20} color={theme.accent} />
                 </View>
@@ -296,19 +317,34 @@ export default function TransactionModal() {
                     {formatDateLabel(date)}, {formatTime(date)}
                   </ThemedText>
                 </View>
-              </View>
+
+                <Ionicons name="chevron-forward" size={18} color={theme.textSecondary} />
+              </Pressable>
 
               {/* Account / Payment Method Row */}
               <Pressable
                 style={styles.formRow}
                 onPress={() => setShowAccountPicker(true)}>
-                <View style={[styles.rowIconBox, { backgroundColor: '#6366F115' }]}>
-                  <Ionicons name="card-outline" size={20} color="#6366F1" />
+                <View
+                  style={[
+                    styles.rowIconBox,
+                    {
+                      backgroundColor:
+                        account === 'Cash' ? '#10B98115' : '#6366F115',
+                    },
+                  ]}>
+                  <Ionicons
+                    name={getAccountIcon(account) as any}
+                    size={20}
+                    color={account === 'Cash' ? '#10B981' : '#6366F1'}
+                  />
                 </View>
 
                 <View style={styles.rowContent}>
-                  <ThemedText style={styles.rowLabel}>Account</ThemedText>
-                  <ThemedText style={styles.rowValue}>{account}</ThemedText>
+                  <ThemedText style={styles.rowLabel}>Account / Method</ThemedText>
+                  <ThemedText style={styles.rowValue}>
+                    {account === 'Cash' ? 'Cash 💵' : account}
+                  </ThemedText>
                 </View>
 
                 <Ionicons name="chevron-forward" size={18} color={theme.textSecondary} />
@@ -434,7 +470,7 @@ export default function TransactionModal() {
                         setShowAccountPicker(false);
                       }}>
                       <Ionicons
-                        name="card-outline"
+                        name={getAccountIcon(acc) as any}
                         size={20}
                         color={acc === account ? theme.primary : theme.textSecondary}
                         style={{ marginRight: 12 }}
@@ -444,11 +480,128 @@ export default function TransactionModal() {
                           styles.accountRowText,
                           acc === account && { color: theme.primary, fontFamily: FontFamily.bold },
                         ]}>
-                        {acc}
+                        {acc === 'Cash' ? 'Cash 💵' : acc}
                       </ThemedText>
                     </Pressable>
                   ))}
                 </View>
+              </View>
+            </View>
+          </Modal>
+
+          {/* Date Picker Modal */}
+          <Modal
+            visible={showDatePicker}
+            transparent
+            animationType="slide"
+            onRequestClose={() => setShowDatePicker(false)}>
+            <View style={styles.pickerOverlay}>
+              <View style={[styles.pickerCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
+                <View style={styles.pickerHeader}>
+                  <ThemedText style={styles.pickerTitle}>Select Date</ThemedText>
+                  <Pressable onPress={() => setShowDatePicker(false)} hitSlop={10}>
+                    <Ionicons name="close" size={22} color={theme.text} />
+                  </Pressable>
+                </View>
+
+                {/* Quick Presets */}
+                <View style={styles.datePresetsRow}>
+                  {[
+                    { label: 'Today', offset: 0 },
+                    { label: 'Yesterday', offset: 1 },
+                    { label: '2 Days Ago', offset: 2 },
+                  ].map((p) => {
+                    const target = new Date();
+                    target.setDate(target.getDate() - p.offset);
+                    const isSelected = isSameDay(date, target);
+
+                    return (
+                      <ScalePressable
+                        key={p.label}
+                        scaleTo={0.93}
+                        haptic="selection"
+                        style={[
+                          styles.datePresetChip,
+                          { backgroundColor: theme.background, borderColor: theme.border },
+                          isSelected && { backgroundColor: `${theme.primary}18`, borderColor: theme.primary },
+                        ]}
+                        onPress={() => {
+                          const newD = new Date();
+                          newD.setDate(newD.getDate() - p.offset);
+                          setDate(newD.toISOString());
+                          HapticsService.selection();
+                          setShowDatePicker(false);
+                        }}>
+                        <ThemedText
+                          style={[
+                            styles.datePresetText,
+                            { color: isSelected ? theme.primary : theme.text },
+                          ]}>
+                          {p.label}
+                        </ThemedText>
+                      </ScalePressable>
+                    );
+                  })}
+                </View>
+
+                {/* Past 14 Days List */}
+                <ThemedText style={styles.recentDatesLabel} themeColor="textSecondary">
+                  Past 14 Days:
+                </ThemedText>
+                <ScrollView style={{ maxHeight: 220 }} showsVerticalScrollIndicator={false}>
+                  {Array.from({ length: 14 }).map((_, idx) => {
+                    const d = new Date();
+                    d.setDate(d.getDate() - idx);
+                    const isSelected = isSameDay(date, d);
+                    const dayName = d.toLocaleDateString('en-IN', { weekday: 'short' });
+                    const dateFormatted = d.toLocaleDateString('en-IN', {
+                      day: 'numeric',
+                      month: 'short',
+                      year: 'numeric',
+                    });
+
+                    return (
+                      <Pressable
+                        key={idx}
+                        style={[
+                          styles.dateRowItem,
+                          isSelected && { backgroundColor: `${theme.primary}12` },
+                        ]}
+                        onPress={() => {
+                          setDate(d.toISOString());
+                          HapticsService.selection();
+                          setShowDatePicker(false);
+                        }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                          <View
+                            style={[
+                              styles.dateDayBadge,
+                              { backgroundColor: theme.background, borderColor: theme.border },
+                              isSelected && { borderColor: theme.primary, backgroundColor: theme.primary },
+                            ]}>
+                            <ThemedText
+                              style={[
+                                styles.dateDayText,
+                                { color: isSelected ? '#FFFFFF' : theme.textSecondary },
+                              ]}>
+                              {dayName}
+                            </ThemedText>
+                          </View>
+                          <ThemedText
+                            style={[
+                              styles.dateItemText,
+                              isSelected && { color: theme.primary, fontFamily: FontFamily.bold },
+                            ]}>
+                            {dateFormatted}
+                          </ThemedText>
+                        </View>
+                        {isSelected ? (
+                          <Ionicons name="checkmark-circle" size={18} color={theme.primary} />
+                        ) : null}
+                      </Pressable>
+                    );
+                  })}
+                </ScrollView>
               </View>
             </View>
           </Modal>
@@ -670,5 +823,50 @@ const styles = StyleSheet.create({
   accountRowText: {
     fontFamily: FontFamily.medium,
     fontSize: 15,
+  },
+  datePresetsRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 6,
+    marginBottom: 14,
+  },
+  datePresetChip: {
+    flex: 1,
+    paddingVertical: 8,
+    borderRadius: 12,
+    borderWidth: 1,
+    alignItems: 'center',
+  },
+  datePresetText: {
+    fontFamily: FontFamily.semiBold,
+    fontSize: 12,
+  },
+  recentDatesLabel: {
+    fontFamily: FontFamily.medium,
+    fontSize: 12,
+    marginBottom: 6,
+  },
+  dateRowItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    marginBottom: 4,
+  },
+  dateDayBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  dateDayText: {
+    fontFamily: FontFamily.bold,
+    fontSize: 11,
+  },
+  dateItemText: {
+    fontFamily: FontFamily.medium,
+    fontSize: 13,
   },
 });

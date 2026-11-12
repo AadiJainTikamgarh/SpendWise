@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useState, useCallback, use
 
 import { useAuth } from './auth-context';
 import { BudgetRepository } from '@/services/budget-repository';
+import { useSmsAutoSync } from '@/services/sms';
 import { TransactionRepository } from '@/services/transaction-repository';
 import { Budget, BudgetPeriod, BudgetStatus, Transaction } from '@/types/finance';
 
@@ -85,6 +86,19 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     refreshData();
   }, [refreshData, user]);
+
+  const handleNewAutoTransactions = useCallback(
+    (_count: number) => {
+      refreshData();
+    },
+    [refreshData]
+  );
+
+  // Background SMS Auto-Ingest: silently ingests verified bank debits/credits on foreground
+  useSmsAutoSync({
+    userId: user?.id,
+    onNewTransactions: handleNewAutoTransactions,
+  });
 
   const addTransaction = useCallback(
     async (

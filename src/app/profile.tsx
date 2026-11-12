@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -22,8 +22,14 @@ import { FontFamily, getScrollViewBottomPadding, MaxContentWidth, Spacing } from
 import { useAuth } from '@/context/auth-context';
 import { useFinance } from '@/context/finance-context';
 import { useAppTheme } from '@/hooks/use-theme';
-import { HapticsService } from '@/services/haptics';
 import { generateCSV, generateJSONBackup, shareExport } from '@/services/export-service';
+import { HapticsService } from '@/services/haptics';
+import {
+  getLastAutoSyncTimestamp,
+  getSmsAutoSyncEnabled,
+  setSmsAutoSyncEnabled,
+  smsSyncService,
+} from '@/services/sms';
 import { BudgetPeriod } from '@/types/finance';
 import { formatINR, paiseToRupees, parseCurrencyInput } from '@/utils/money';
 
@@ -42,6 +48,46 @@ export default function ProfileScreen() {
   const [isSavingBudget, setIsSavingBudget] = useState(false);
   const [isSmsModalVisible, setIsSmsModalVisible] = useState(false);
   const [isStatementModalVisible, setIsStatementModalVisible] = useState(false);
+  const [autoSyncEnabled, setAutoSyncEnabled] = useState(true);
+  const [lastSyncText, setLastSyncText] = useState<string | null>(null);
+
+  useEffect(() => {
+    let isMounted = true;
+    getSmsAutoSyncEnabled().then((enabled) => {
+      if (isMounted) setAutoSyncEnabled(enabled);
+    });
+    getLastAutoSyncTimestamp().then((ts) => {
+      if (isMounted && ts) {
+        const minutesAgo = Math.round((Date.now() - ts) / 60000);
+        if (minutesAgo < 1) setLastSyncText('Just now');
+        else if (minutesAgo < 60) setLastSyncText(`${minutesAgo}m ago`);
+        else setLastSyncText(`${Math.round(minutesAgo / 60)}h ago`);
+      }
+    });
+    return () => {
+      isMounted = false;
+    };
+  }, [autoSyncEnabled]);
+
+  const handleToggleAutoSync = async (val: boolean) => {
+    HapticsService.light();
+    if (val) {
+      const hasPerm = await smsSyncService.checkPermission();
+      if (!hasPerm) {
+        const res = await smsSyncService.requestPermission();
+        if (res !== 'granted') {
+          Alert.alert(
+            'SMS Permission Required',
+            'SpendWise needs SMS read permission to automatically detect bank and UPI debits in the background.',
+            [{ text: 'OK' }]
+          );
+          return;
+        }
+      }
+    }
+    setAutoSyncEnabled(val);
+    await setSmsAutoSyncEnabled(val);
+  };
 
   const displayName = user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'User';
   const email = user?.email || 'Not signed in';
@@ -280,19 +326,39 @@ export default function ProfileScreen() {
               <Ionicons name="chevron-forward" size={18} color={theme.textSecondary} />
             </ScalePressable>
 
-            {/* Bank SMS Auto-Tracking */}
+            {/* Background SMS Auto-Sync Switch */}
+            <View style={[styles.menuRow, { borderBottomColor: theme.border }]}>
+              <View style={[styles.menuIconBox, { backgroundColor: '#10B98115' }]}>
+                <Ionicons name="flash-outline" size={18} color="#10B981" />
+              </View>
+              <View style={styles.menuTextContainer}>
+                <ThemedText style={styles.menuTitle}>Background SMS Auto-Sync</ThemedText>
+                <ThemedText style={styles.menuSubtitle} themeColor="textSecondary">
+                  Auto-detect bank debits when opening app
+                  {lastSyncText ? ` • Synced ${lastSyncText}` : ''}
+                </ThemedText>
+              </View>
+              <Switch
+                value={autoSyncEnabled}
+                onValueChange={handleToggleAutoSync}
+                trackColor={{ false: theme.border, true: '#10B981' }}
+                thumbColor="#FFFFFF"
+              />
+            </View>
+
+            {/* Bank SMS Review & Manual Scan */}
             <ScalePressable
               style={[styles.menuRow, { borderBottomColor: theme.border }]}
               haptic="selection"
               scaleTo={0.98}
               onPress={() => setIsSmsModalVisible(true)}>
-              <View style={[styles.menuIconBox, { backgroundColor: '#10B98115' }]}>
-                <Ionicons name="chatbox-ellipses-outline" size={18} color="#10B981" />
+              <View style={[styles.menuIconBox, { backgroundColor: '#05966915' }]}>
+                <Ionicons name="chatbox-ellipses-outline" size={18} color="#059669" />
               </View>
               <View style={styles.menuTextContainer}>
-                <ThemedText style={styles.menuTitle}>Bank SMS Auto-Tracking</ThemedText>
+                <ThemedText style={styles.menuTitle}>Review & Deep Scan SMS</ThemedText>
                 <ThemedText style={styles.menuSubtitle} themeColor="textSecondary">
-                  Detect UPI & card expenses from SMS
+                  Inspect inbox & select transactions
                 </ThemedText>
               </View>
               <Ionicons name="chevron-forward" size={18} color={theme.textSecondary} />
