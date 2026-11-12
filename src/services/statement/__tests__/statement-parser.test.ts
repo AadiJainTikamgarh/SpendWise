@@ -47,17 +47,24 @@ Trip ID: ub-92847291`;
 
   // 3. Test Bank CSV Parser
   const bankCsv = `Date,Narration,Debit,Credit,Ref No
-09/11/2026,UPI/4314241/SWIGGY/HDFC,450.00,,4314241241
-08/11/2026,POS 9284 STARBUCKS,850.00,,928472194
+09/11/2026,"UPI/4314241/SWIGGY, BANGALORE",450.00,,4314241241
+08/11/2026,POS 9284 STARBUCKS,"1,250.00",,928472194
 01/11/2026,ACH/SALARY/TECHCORP,,85000.00,SAL928412`;
 
   const csvRows = parseCsvStatement(bankCsv);
   if (csvRows.length !== 3) {
     failures.push(`CSV parsing row count mismatch: expected 3, got ${csvRows.length}`);
   } else {
-    // Check row 1 (Expense ₹450)
+    // Check row 1 (Expense ₹450 with quoted narration containing comma)
     if (csvRows[0].amount !== 45000 || csvRows[0].type !== 'expense') {
       failures.push(`CSV Row 1 mismatch: ${JSON.stringify(csvRows[0])}`);
+    } else {
+      successes++;
+    }
+
+    // Check row 2 (Expense ₹1,250 with quoted amount containing comma)
+    if (csvRows[1].amount !== 125000 || csvRows[1].type !== 'expense') {
+      failures.push(`CSV Row 2 mismatch: expected 125000, got ${csvRows[1].amount}`);
     } else {
       successes++;
     }

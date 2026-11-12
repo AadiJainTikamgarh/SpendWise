@@ -14,7 +14,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
@@ -64,6 +64,7 @@ const getAccountIcon = (acc: string) => {
 
 export default function TransactionModal() {
   const theme = useTheme();
+  const insets = useSafeAreaInsets();
   const { transactions, addTransaction, editTransaction, removeTransaction } = useFinance();
 
   const params = useLocalSearchParams<{
@@ -407,7 +408,7 @@ export default function TransactionModal() {
             animationType="slide"
             onRequestClose={() => setShowCategoryPicker(false)}>
             <View style={styles.pickerOverlay}>
-              <View style={[styles.pickerCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
+              <View style={[styles.pickerCard, { backgroundColor: theme.card, borderColor: theme.border, paddingBottom: Math.max(20, insets.bottom + 16) }]}>
                 <View style={styles.pickerHeader}>
                   <ThemedText style={styles.pickerTitle}>Select Category</ThemedText>
                   <Pressable onPress={() => setShowCategoryPicker(false)} hitSlop={10}>
@@ -449,7 +450,7 @@ export default function TransactionModal() {
             animationType="slide"
             onRequestClose={() => setShowAccountPicker(false)}>
             <View style={styles.pickerOverlay}>
-              <View style={[styles.pickerCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
+              <View style={[styles.pickerCard, { backgroundColor: theme.card, borderColor: theme.border, paddingBottom: Math.max(20, insets.bottom + 16) }]}>
                 <View style={styles.pickerHeader}>
                   <ThemedText style={styles.pickerTitle}>Select Account</ThemedText>
                   <Pressable onPress={() => setShowAccountPicker(false)} hitSlop={10}>
@@ -496,7 +497,7 @@ export default function TransactionModal() {
             animationType="slide"
             onRequestClose={() => setShowDatePicker(false)}>
             <View style={styles.pickerOverlay}>
-              <View style={[styles.pickerCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
+              <View style={[styles.pickerCard, { backgroundColor: theme.card, borderColor: theme.border, paddingBottom: Math.max(20, insets.bottom + 16) }]}>
                 <View style={styles.pickerHeader}>
                   <ThemedText style={styles.pickerTitle}>Select Date</ThemedText>
                   <Pressable onPress={() => setShowDatePicker(false)} hitSlop={10}>

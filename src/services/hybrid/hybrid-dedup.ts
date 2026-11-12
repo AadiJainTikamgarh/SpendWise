@@ -8,6 +8,7 @@ export interface CandidateTransaction {
   title: string;
   notes?: string;
   referenceNo?: string;
+  smsId?: string;
   source?: TransactionSource;
   isDuplicate?: boolean;
   duplicateOfId?: string;
@@ -74,14 +75,34 @@ export function deduplicateAgainstExisting<T extends CandidateTransaction>(
         return false;
       }
 
-      // 2. High confidence: exact reference / RRN / UPI ID match
-      if (candidate.referenceNo) {
-        const ref = candidate.referenceNo.toLowerCase();
-        if (tx.rawReference && tx.rawReference.toLowerCase().includes(ref)) {
-          return true;
+      // 2. High confidence: exact reference / RRN / UPI ID match, or SMS/candidate ID match
+      if (candidate.referenceNo && candidate.referenceNo.trim().length > 0) {
+        const ref = candidate.referenceNo.trim().toLowerCase();
+        if (tx.rawReference && tx.rawReference.trim().length > 0) {
+          const txRef = tx.rawReference.trim().toLowerCase();
+          if (txRef.includes(ref) || ref.includes(txRef)) {
+            return true;
+          }
         }
         if (tx.notes && tx.notes.toLowerCase().includes(ref)) {
           return true;
+        }
+      }
+
+      // Check candidate.smsId and candidate.id against tx.rawReference
+      if (tx.rawReference && tx.rawReference.trim().length > 0) {
+        const txRef = tx.rawReference.trim().toLowerCase();
+        if (candidate.smsId && candidate.smsId.trim().length > 0) {
+          const smsId = candidate.smsId.trim().toLowerCase();
+          if (txRef === smsId || (smsId.length >= 6 && txRef.includes(smsId))) {
+            return true;
+          }
+        }
+        if (candidate.id && candidate.id.trim().length > 0) {
+          const candId = candidate.id.trim().toLowerCase();
+          if (txRef === candId || (candId.length >= 6 && txRef.includes(candId))) {
+            return true;
+          }
         }
       }
 

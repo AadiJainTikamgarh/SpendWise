@@ -46,3 +46,8 @@ build/
 .gradle/
 modules/**/build/
 modules/**/.gradle/
+
+# agent teamwork scratch
+.agents/teamwork/
+PROJECT.md
+TEST_INFRA.md

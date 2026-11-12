@@ -181,30 +181,58 @@ export const TransactionRepository = {
     const db = getDatabase();
     if (!db || Platform.OS === 'web') {
       const list = await getWebTransactions();
+      if (newTx.rawReference) {
+        const existing = list.find(
+          (t) => t.rawReference && t.rawReference.toLowerCase() === newTx.rawReference!.toLowerCase()
+        );
+        if (existing) {
+          return existing;
+        }
+      }
       list.unshift(newTx);
       await saveWebTransactions(list);
       return newTx;
     }
 
-    await db.runAsync(
-      `INSERT INTO transactions (id, user_id, amount, type, category_id, date, title, notes, payment_method, source, raw_reference, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      newTx.id,
-      newTx.userId || null,
-      newTx.amount,
-      newTx.type,
-      newTx.categoryId,
-      newTx.date,
-      newTx.title,
-      newTx.notes || null,
-      newTx.paymentMethod || null,
-      newTx.source || 'manual',
-      newTx.rawReference || null,
-      newTx.createdAt,
-      newTx.updatedAt
-    );
+    try {
+      await db.runAsync(
+        `INSERT INTO transactions (id, user_id, amount, type, category_id, date, title, notes, payment_method, source, raw_reference, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        newTx.id,
+        newTx.userId || null,
+        newTx.amount,
+        newTx.type,
+        newTx.categoryId,
+        newTx.date,
+        newTx.title,
+        newTx.notes || null,
+        newTx.paymentMethod || null,
+        newTx.source || 'manual',
+        newTx.rawReference || null,
+        newTx.createdAt,
+        newTx.updatedAt
+      );
 
-    return newTx;
+      return newTx;
+    } catch (error: any) {
+      const errorMsg = String(error?.message || error || '');
+      const isConstraintCollision =
+        errorMsg.includes('UNIQUE constraint failed') ||
+        errorMsg.includes('constraint failed') ||
+        errorMsg.includes('SQLITE_CONSTRAINT');
+
+      if (isConstraintCollision && newTx.rawReference) {
+        const existingRow = await db.getFirstAsync<RawTransactionRow>(
+          'SELECT * FROM transactions WHERE raw_reference = ? LIMIT 1',
+          newTx.rawReference
+        );
+        if (existingRow) {
+          return mapRowToTransaction(existingRow);
+        }
+      }
+
+      throw error;
+    }
   },
 
   async updateTransaction(id: string, updates: Partial<Transaction>): Promise<Transaction> {

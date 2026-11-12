@@ -94,6 +94,39 @@ export function cleanBankNarration(narration: string): string {
 }
 
 /**
+ * Tokenizes a CSV line according to RFC 4180 rules, respecting quotes.
+ */
+export function tokenizeCsvLine(line: string, defaultDelimiter: string = ','): string[] {
+  const tokens: string[] = [];
+  let current = '';
+  let inQuotes = false;
+
+  let delim = defaultDelimiter;
+  if (!line.includes(',') && (line.includes(';') || line.includes('\t'))) {
+    delim = line.includes('\t') ? '\t' : ';';
+  }
+
+  for (let i = 0; i < line.length; i++) {
+    const char = line[i];
+    if (char === '"') {
+      if (inQuotes && line[i + 1] === '"') {
+        current += '"';
+        i++;
+      } else {
+        inQuotes = !inQuotes;
+      }
+    } else if (char === delim && !inQuotes) {
+      tokens.push(current.trim().replace(/^["']|["']$/g, ''));
+      current = '';
+    } else {
+      current += char;
+    }
+  }
+  tokens.push(current.trim().replace(/^["']|["']$/g, ''));
+  return tokens;
+}
+
+/**
  * Parses raw CSV statement lines into structured transactions.
  */
 export function parseCsvStatement(rawText: string): ParsedStatementTransaction[] {
@@ -103,7 +136,7 @@ export function parseCsvStatement(rawText: string): ParsedStatementTransaction[]
   const results: ParsedStatementTransaction[] = [];
 
   // Parse header line
-  const headerTokens = lines[0].split(/[,;\t]/).map((h) => h.toLowerCase().trim().replace(/["']/g, ''));
+  const headerTokens = tokenizeCsvLine(lines[0]).map((h) => h.toLowerCase().trim().replace(/["']/g, ''));
 
   const dateIdx = headerTokens.findIndex((h) => h.includes('date'));
   const descIdx = headerTokens.findIndex((h) => h.includes('desc') || h.includes('narration') || h.includes('particular'));
@@ -113,7 +146,7 @@ export function parseCsvStatement(rawText: string): ParsedStatementTransaction[]
   const refIdx = headerTokens.findIndex((h) => h.includes('ref') || h.includes('chq') || h.includes('utr') || h.includes('rrn'));
 
   for (let i = 1; i < lines.length; i++) {
-    const row = lines[i].split(/[,;\t]/).map((c) => c.trim().replace(/^["']|["']$/g, ''));
+    const row = tokenizeCsvLine(lines[i]);
     if (row.length < 2) continue;
 
     const rawDate = dateIdx >= 0 ? row[dateIdx] : row[0];

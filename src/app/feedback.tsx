@@ -11,7 +11,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -23,6 +23,7 @@ import {
   FeedbackService,
   QUICK_FEATURE_SUGGESTIONS,
 } from '@/services/feedback-service';
+import { HapticsService } from '@/services/haptics';
 import { safeGoBack } from '@/utils/navigation';
 
 interface CategoryOption {
@@ -70,6 +71,7 @@ const RATING_LABELS = [
 
 export default function FeedbackScreen() {
   const { theme, isDark } = useAppTheme();
+  const insets = useSafeAreaInsets();
   const { user } = useAuth();
 
   const [category, setCategory] = useState<FeedbackCategory>('feature_request');
@@ -89,28 +91,39 @@ export default function FeedbackScreen() {
   };
 
   const handleSubmit = async () => {
-    if (!title.trim()) {
-      Alert.alert('Title Required', 'Please enter a brief summary or title for your feedback.');
+    const effectiveDescription = description.trim() || title.trim();
+    if (!effectiveDescription) {
+      Alert.alert('Feedback Required', 'Please share some details or thoughts so we understand your suggestion.');
       return;
     }
 
-    if (!description.trim()) {
-      Alert.alert('Details Required', 'Please share some details so we understand your suggestion.');
-      return;
-    }
+    const categoryObj = CATEGORIES.find((c) => c.key === category);
+    const effectiveTitle = title.trim() || categoryObj?.label || 'SpendWise Feedback';
 
     setIsSubmitting(true);
     try {
       await FeedbackService.submitFeedback({
         category,
         rating,
-        title: title.trim(),
-        description: description.trim(),
+        title: effectiveTitle,
+        description: effectiveDescription,
         userId: isAnonymous ? undefined : user?.id,
         userEmail: isAnonymous ? undefined : user?.email,
       });
 
+      HapticsService.success();
       setIsSubmitted(true);
+
+      Alert.alert(
+        'Feedback Submitted',
+        'Thank you for helping us improve SpendWise! Your feedback has been received.',
+        [
+          {
+            text: 'OK',
+            onPress: () => safeGoBack('/profile'),
+          },
+        ]
+      );
     } catch {
       Alert.alert(
         'Submission Failed',
@@ -460,7 +473,7 @@ export default function FeedbackScreen() {
                 <ThemedText style={styles.emailButtonText}>Open in Email App</ThemedText>
               </Pressable>
 
-              <View style={{ height: 40 }} />
+              <View style={{ height: Math.max(40, insets.bottom + 24) }} />
             </ScrollView>
           </KeyboardAvoidingView>
         )}

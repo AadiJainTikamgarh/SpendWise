@@ -73,6 +73,7 @@ function initDatabase(db: SQLiteDatabase) {
     CREATE INDEX IF NOT EXISTS idx_transactions_date ON transactions(date);
     CREATE INDEX IF NOT EXISTS idx_transactions_type ON transactions(type);
     CREATE INDEX IF NOT EXISTS idx_transactions_category ON transactions(category_id);
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_transactions_raw_ref ON transactions(raw_reference) WHERE raw_reference IS NOT NULL;
 
     CREATE TABLE IF NOT EXISTS budgets (
       id TEXT PRIMARY KEY NOT NULL,
@@ -105,7 +106,20 @@ function initDatabase(db: SQLiteDatabase) {
     if (!columnNames.has('raw_reference')) {
       db.execSync('ALTER TABLE transactions ADD COLUMN raw_reference TEXT;');
     }
-  } catch {
-    // Non-fatal fallback
+
+    // Clean up any historical duplicate non-null raw_references before enforcing unique index
+    db.execSync(`
+      DELETE FROM transactions
+      WHERE raw_reference IS NOT NULL
+        AND rowid NOT IN (
+          SELECT MIN(rowid)
+          FROM transactions
+          WHERE raw_reference IS NOT NULL
+          GROUP BY raw_reference
+        );
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_transactions_raw_ref ON transactions(raw_reference) WHERE raw_reference IS NOT NULL;
+    `);
+  } catch (e) {
+    console.warn('Non-destructive migration warning (raw_reference unique index):', e);
   }
 }
