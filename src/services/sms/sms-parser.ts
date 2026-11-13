@@ -194,6 +194,14 @@ export function isAllowedSender(address: string, body: string): boolean {
   if (!address) return false;
   const cleanAddress = address.trim();
 
+  // 0. Explicit user imports (Paste Bank SMS tab or Manual paste modal) are always allowed
+  if (
+    cleanAddress.toUpperCase().startsWith('PASTED') ||
+    cleanAddress.toUpperCase() === 'MANUAL'
+  ) {
+    return true;
+  }
+
   // 1. Never allow personal phone numbers (strip formatting spaces, hyphens, dots, parentheses)
   const normalizedAddress = cleanAddress.replace(/[\s\-\(\)\.]/g, '');
   if (PERSONAL_NUMBER_REGEX.test(normalizedAddress)) {
