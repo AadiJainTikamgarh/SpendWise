@@ -25,12 +25,16 @@ export const TRAI_BANK_HEADERS: readonly BankHeaderEntry[] = [
   { code: 'SBIBNK', bankName: 'State Bank of India', category: 'public' },
   { code: 'SBINBS', bankName: 'State Bank of India', category: 'public' },
   { code: 'SBIINB', bankName: 'State Bank of India', category: 'public' },
+  { code: 'SBIN', bankName: 'State Bank of India', category: 'public' },
+  { code: 'SBI', bankName: 'State Bank of India', category: 'public' },
   { code: 'SBYONO', bankName: 'State Bank of India', category: 'public' },
   { code: 'SBIUPI', bankName: 'State Bank of India', category: 'public' },
   { code: 'SBICRD', bankName: 'SBI Card', category: 'public' },
   { code: 'SBIATM', bankName: 'State Bank of India', category: 'public' },
   { code: 'SBIOTP', bankName: 'State Bank of India', category: 'public' },
   { code: 'SBISMS', bankName: 'State Bank of India', category: 'public' },
+  { code: 'SBIPAY', bankName: 'State Bank of India', category: 'public' },
+  { code: 'SBIDGT', bankName: 'State Bank of India', category: 'public' },
 
   { code: 'PNBSMS', bankName: 'Punjab National Bank', category: 'public' },
   { code: 'PNBBNK', bankName: 'Punjab National Bank', category: 'public' },
@@ -370,10 +374,21 @@ export function extractTraiCoreHeader(address: string): string {
     return suffixMatch[1];
   }
 
-  // Pattern 4: Bare alphanumeric header
+  // Pattern 4: Bare alphanumeric header or unhyphenated circle prefix + header (e.g. "VMSBIN", "JMUNIONB", "ADSBIN")
   const bareMatch = trimmed.match(/^([A-Z0-9]{3,11})$/);
   if (bareMatch && bareMatch[1]) {
-    return bareMatch[1];
+    const raw = bareMatch[1];
+    if (HEADER_LOOKUP_MAP.has(raw)) {
+      return raw;
+    }
+    // Check if stripping the standard 2-letter circle prefix matches a known bank
+    if (raw.length >= 5) {
+      const strippedCircle = raw.slice(2);
+      if (HEADER_LOOKUP_MAP.has(strippedCircle)) {
+        return strippedCircle;
+      }
+    }
+    return raw;
   }
 
   return trimmed;

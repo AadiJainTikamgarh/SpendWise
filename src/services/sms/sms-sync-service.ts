@@ -36,7 +36,7 @@ export const smsSyncService = {
 
   async scanInbox(options?: { daysBack?: number; maxCount?: number }): Promise<SmsSyncScanResult> {
     const days = options?.daysBack ?? 30;
-    const maxCount = options?.maxCount ?? 500;
+    const maxCount = options?.maxCount ?? (days >= 90 ? 5000 : days >= 30 ? 2000 : 800);
     const minDate = Date.now() - days * 24 * 60 * 60 * 1000;
 
     const moduleAvailable = isSmsReaderAvailable();

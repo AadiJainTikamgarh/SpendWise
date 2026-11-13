@@ -295,6 +295,47 @@ export function runParserTests(): TestResult {
       expectedTitle: 'Ver S',
     },
     {
+      name: 'Union Bank Rs 132 Credit (Nov 6 Live User Sample)',
+      sms: {
+        id: 'union-bank-user-nov6',
+        address: 'JM-UNIONB-S',
+        body: 'A/c *1650 Credited for Rs:132.00 on 06-11-2026 14:31:51 by Mob Bk ref no 132454856645 Avl Bal Rs:136.57.Never Share OTP/PIN/CVV-Union Bank of India',
+        date: 1793975511000,
+      },
+      expectedAmountPaise: 13200,
+      expectedType: 'income',
+      expectedAccountLast4: '1650',
+      expectedReferenceNo: '132454856645',
+      expectedBankName: 'Union Bank of India',
+    },
+    {
+      name: 'SBI Debit with Security Warning Footer and Colon Currency',
+      sms: {
+        id: 'sbi-debit-warning',
+        address: 'VM-SBIN',
+        body: 'Dear SBI User, your A/C *1234 debited for Rs:500.00 on 09Nov26 transfer to Zomato UPI Ref No 4315352352. Bal: Rs 12,430. Do not share OTP with anyone - State Bank of India',
+        date: 1794218100000,
+      },
+      expectedAmountPaise: 50000,
+      expectedType: 'expense',
+      expectedAccountLast4: '1234',
+      expectedReferenceNo: '4315352352',
+      expectedBankName: 'State Bank of India',
+    },
+    {
+      name: 'SBI Credit with Never Share OTP and Unhyphenated Header',
+      sms: {
+        id: 'sbi-credit-warning',
+        address: 'VMSBIN',
+        body: 'Your A/C ending with 4321 Credited for Rs:2,500.00 on 08-11-2026 by UPI/431234567890. Avl Bal Rs:25,000. Never share OTP/Password with anyone - SBI',
+        date: 1794140000000,
+      },
+      expectedAmountPaise: 250000,
+      expectedType: 'income',
+      expectedAccountLast4: '4321',
+      expectedBankName: 'State Bank of India',
+    },
+    {
       name: 'Airtel Payments Bank Debit (AD-AIRBNK-T)',
       sms: {
         id: 'airbnk-debit',

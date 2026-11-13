@@ -67,7 +67,10 @@ export function SmsReviewModal({ visible, onClose }: SmsReviewModalProps) {
 
     setIsScanning(true);
     try {
-      const result = await smsSyncService.scanInbox({ daysBack });
+      const result = await smsSyncService.scanInbox({
+        daysBack,
+        maxCount: daysBack >= 90 ? 5000 : daysBack >= 30 ? 2000 : 800,
+      });
 
       if (!result.isModuleAvailable) {
         Alert.alert(
