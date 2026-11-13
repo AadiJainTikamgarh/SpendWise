@@ -90,12 +90,12 @@ const IGNORE_PATTERNS = [
 
 // Strict contextual expense patterns grammatically tied to the amount or account
 const STRICT_EXPENSE_PATTERNS = [
-  // Verb before amount (prefix or postfix currency)
-  /\b(?:debited|deducted|withdrawn)\s+(?:by|with|for)?\s*(?:rs\.?|inr|\u20B9)?\s*[0-9,]+/i,
+  // Verb before amount (prefix or postfix currency, e.g. "debited by Rs 250", "Dr Rs5.00", "Dr. Rs. 50")
+  /\b(?:debited|deducted|withdrawn|dr\.?)\s+(?:by|with|for)?\s*(?:rs\.?|inr|\u20B9)?\s*[0-9,]+/i,
   // Prefix currency amount before debit verb (with optional auxiliary verbs and adverbs)
-  /(?:rs\.?|inr|\u20B9)\.?\s*[0-9,]+(?:\.[0-9]{1,2})?\s*(?:(?:has|have)\s+been\s+|was\s+|is\s+)?(?:successfully\s+)?(?:debited|deducted|withdrawn)/i,
+  /(?:rs\.?|inr|\u20B9)\.?\s*[0-9,]+(?:\.[0-9]{1,2})?\s*(?:(?:has|have)\s+been\s+|was\s+|is\s+)?(?:successfully\s+)?(?:debited|deducted|withdrawn|dr\.?)\b/i,
   // Postfix currency amount before debit verb (e.g. "350.00 INR debited", "350.00 INR was debited")
-  /[0-9,]+(?:\.[0-9]{1,2})?\s*(?:rs\.?|inr|\u20B9)\.?\s*(?:(?:has|have)\s+been\s+|was\s+|is\s+)?(?:successfully\s+)?(?:debited|deducted|withdrawn)/i,
+  /[0-9,]+(?:\.[0-9]{1,2})?\s*(?:rs\.?|inr|\u20B9)\.?\s*(?:(?:has|have)\s+been\s+|was\s+|is\s+)?(?:successfully\s+)?(?:debited|deducted|withdrawn|dr\.?)\b/i,
   // Verb before amount with destination/source
   /\b(?:paid|spent|sent)[:.]?\s*(?:rs\.?|inr|\u20B9)?\s*[0-9,]+(?:\.[0-9]{1,2})?\s+(?:from|to|at|for|via|on)\b/i,
   // Prefix currency amount before paid/spent/transferred (e.g. "Rs 1,299.00 was spent", "Rs. 500 spent on")
@@ -110,12 +110,12 @@ const STRICT_EXPENSE_PATTERNS = [
 
 // Strict contextual income patterns grammatically tied to the amount or account
 const STRICT_INCOME_PATTERNS = [
-  // Verb before amount
-  /\b(?:credited|deposited)\s+(?:by|with|for|to)?\s*(?:rs\.?|inr|\u20B9)?\s*[0-9,]+/i,
+  // Verb before amount (e.g. "credited by Rs 500", "Cr Rs. 1000", "Cr. INR 250")
+  /\b(?:credited|deposited|cr\.?)\s+(?:by|with|for|to)?\s*(?:rs\.?|inr|\u20B9)?\s*[0-9,]+/i,
   // Prefix currency amount before credit verb (with optional auxiliary verbs)
-  /(?:rs\.?|inr|\u20B9)\.?\s*[0-9,]+(?:\.[0-9]{1,2})?\s*(?:(?:has|have)\s+been\s+|was\s+|is\s+)?(?:successfully\s+)?(?:credited|deposited)/i,
+  /(?:rs\.?|inr|\u20B9)\.?\s*[0-9,]+(?:\.[0-9]{1,2})?\s*(?:(?:has|have)\s+been\s+|was\s+|is\s+)?(?:successfully\s+)?(?:credited|deposited|cr\.?)\b/i,
   // Postfix currency amount before credit verb (e.g. "5000.00 INR credited", "5000.00 INR was credited")
-  /[0-9,]+(?:\.[0-9]{1,2})?\s*(?:rs\.?|inr|\u20B9)\.?\s*(?:(?:has|have)\s+been\s+|was\s+|is\s+)?(?:successfully\s+)?(?:credited|deposited)/i,
+  /[0-9,]+(?:\.[0-9]{1,2})?\s*(?:rs\.?|inr|\u20B9)\.?\s*(?:(?:has|have)\s+been\s+|was\s+|is\s+)?(?:successfully\s+)?(?:credited|deposited|cr\.?)\b/i,
   // Received amount (prefix or postfix)
   /\breceived\s+(?:rs\.?|inr|\u20B9)?\s*[0-9,]+(?:\.[0-9]{1,2})?\s*(?:rs\.?|inr|\u20B9)?\s+(?:from|via|in)\b/i,
   // Prefix amount before received
@@ -219,20 +219,20 @@ const BALANCE_STATEMENT_REGEX =
 
 // Contextual verb-tied amount extraction patterns
 const CONTEXTUAL_AMOUNT_PATTERNS: RegExp[] = [
-  // 1. Transaction verb preceding amount: "debited by Rs 250.00", "debited for INR 1,500.00", "withdrawn for Rs 2,000.00"
-  /(?:debited|deducted|withdrawn)\s+(?:by|with|for)?\s*(?:(?:rs\.?|inr|\u20B9)\.?\s*)?([0-9,]+(?:\.[0-9]{1,2})?)/i,
+  // 1. Transaction verb preceding amount: "debited by Rs 250.00", "debited for INR 1,500.00", "withdrawn for Rs 2,000.00", "Dr Rs5.00"
+  /(?:debited|deducted|withdrawn|dr\.?)\s+(?:by|with|for)?\s*(?:(?:rs\.?|inr|\u20B9)\.?\s*)?([0-9,]+(?:\.[0-9]{1,2})?)/i,
   // 2. Spending verb preceding amount: "Paid Rs.120.00", "spent: Rs.450.00", "Sent: Rs.450.00"
   /(?:paid|spent|sent)[:.]?\s*(?:(?:rs\.?|inr|\u20B9)\.?\s*)?([0-9,]+(?:\.[0-9]{1,2})?)/i,
   // 3. Purchase preceding amount: "purchase of INR 850.00", "purchase for Rs 500"
   /(?:purchase\s+of|purchase\s+for)\s+(?:(?:rs\.?|inr|\u20B9)\.?\s*)?([0-9,]+(?:\.[0-9]{1,2})?)/i,
-  // 4. Income verb preceding amount: "credited by Rs 500", "deposited for INR 1,000", "received Rs 200"
-  /(?:credited|deposited|received)\s+(?:by|with|for|to|in)?\s*(?:(?:rs\.?|inr|\u20B9)\.?\s*)?([0-9,]+(?:\.[0-9]{1,2})?)/i,
+  // 4. Income verb preceding amount: "credited by Rs 500", "deposited for INR 1,000", "received Rs 200", "Cr Rs 500"
+  /(?:credited|deposited|received|cr\.?)\s+(?:by|with|for|to|in)?\s*(?:(?:rs\.?|inr|\u20B9)\.?\s*)?([0-9,]+(?:\.[0-9]{1,2})?)/i,
   // 5. Prefix currency amount preceding transaction verb: "Rs 500.00 was debited", "INR 320.00 debited", "Rs 1,299.00 spent", "Rs 85,000.00 credited"
-  /(?:(?:rs\.?|inr|\u20B9)\.?\s*)([0-9,]+(?:\.[0-9]{1,2})?)\s*(?:(?:has|have)\s+been\s+|was\s+|is\s+)?(?:successfully\s+)?(?:debited|deducted|withdrawn|paid|spent|transferred|credited|deposited)/i,
+  /(?:(?:rs\.?|inr|\u20B9)\.?\s*)([0-9,]+(?:\.[0-9]{1,2})?)\s*(?:(?:has|have)\s+been\s+|was\s+|is\s+)?(?:successfully\s+)?(?:debited|deducted|withdrawn|dr\.?|paid|spent|transferred|credited|deposited|cr\.?)/i,
   // 6. Postfix currency amount preceding transaction verb: "350.00 INR debited", "350.00 INR was debited", "350 Rs spent", "5000.00 INR credited"
-  /([0-9,]+(?:\.[0-9]{1,2})?)\s*(?:rs\.?|inr|\u20B9)\.?\s*(?:(?:has|have)\s+been\s+|was\s+|is\s+)?(?:successfully\s+)?(?:debited|deducted|withdrawn|paid|spent|transferred|credited|deposited)/i,
+  /([0-9,]+(?:\.[0-9]{1,2})?)\s*(?:rs\.?|inr|\u20B9)\.?\s*(?:(?:has|have)\s+been\s+|was\s+|is\s+)?(?:successfully\s+)?(?:debited|deducted|withdrawn|dr\.?|paid|spent|transferred|credited|deposited|cr\.?)/i,
   // 7. Transaction verb preceding postfix currency amount: "debited by 350.00 INR", "credited with 500.00 INR", "paid 120.00 INR"
-  /(?:debited|deducted|withdrawn|paid|spent|sent|credited|deposited)\s+(?:by|with|for|to)?\s*([0-9,]+(?:\.[0-9]{1,2})?)\s*(?:rs\.?|inr|\u20B9)/i,
+  /(?:debited|deducted|withdrawn|dr\.?|paid|spent|sent|credited|deposited|cr\.?)\s+(?:by|with|for|to)?\s*([0-9,]+(?:\.[0-9]{1,2})?)\s*(?:rs\.?|inr|\u20B9)/i,
 ];
 
 export function extractAmount(body: string): number | null {
@@ -310,7 +310,14 @@ export function extractAccountLast4(body: string): string | undefined {
 }
 
 export function extractMerchant(body: string, type: TransactionType): string {
+  // Strip fraud helpline/security warnings so they don't match "SMS BLOCK ... to 8879635472"
+  const cleanBody = body.replace(
+    /(?:call\s+[0-9\/\-]+|sms\s+block\s+.*|if\s+not\s+you.*|not\s+u\?.*|not\s+you\?.*)/i,
+    ''
+  );
+
   const merchantPatterns = [
+    /(?:fv\.?|favouring|fav)\s*[:.]?\s*([A-Za-z0-9&'\-\s]{2,30}?)(?=[,.\s]+(?:bal|avl|on|via|ref|upi|not)|$)/i,
     /(?:to|at|info\/)\s+([A-Za-z0-9._&'\-\s]{2,30}?)(?:\s+(?:on|via|ref|upi|avl|bal|not|if|using|\.|\,)|$)/i,
     /(?:for\s+(?:purchase of\s+)?)([A-Za-z0-9._&'\-\s]{2,30}?)(?:\s+(?:on|via|ref|upi|avl|bal|\.|\,)|$)/i,
     /(?:vpa\s+)([A-Za-z0-9._@\-]+)/i,
@@ -318,12 +325,13 @@ export function extractMerchant(body: string, type: TransactionType): string {
   ];
 
   for (const pattern of merchantPatterns) {
-    const match = body.match(pattern);
+    const match = cleanBody.match(pattern);
     if (match && match[1]) {
       const candidate = match[1].trim().replace(/^[._\-]+|[._\-]+$/g, '');
       if (
-        candidate.length > 2 &&
-        !/^(account|a\/c|bank|card|rs|inr|upi|your|dear|transfer|spent|paid|credited|debited)$/i.test(
+        candidate.length > 1 &&
+        !/^[0-9]+$/.test(candidate) &&
+        !/^(account|a\/c|bank|card|rs|inr|upi|your|dear|transfer|spent|paid|credited|debited|block|call)$/i.test(
           candidate
         )
       ) {
@@ -348,6 +356,7 @@ function cleanTitle(str: string): string {
 export function extractReferenceNumber(body: string): string | undefined {
   const patterns = [
     /(?:ref(?:erence)?\s*(?:no\.?)?|rrn|upi\s*ref(?:erence)?)\s*[:.]?\s*([0-9A-Za-z]{6,20})/i,
+    /\b(?:mb|imps|neft|rtgs|txn)\s*(?:no\.?|id|ref)?\s*[:.]?\s*([0-9A-Za-z]{8,20})/i,
     /\bupi\/([0-9]{8,16})\b/i,
   ];
 

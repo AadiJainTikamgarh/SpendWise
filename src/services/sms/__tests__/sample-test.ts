@@ -275,6 +275,20 @@ export function runParserTests(): TestResult {
       expectedBankName: 'Axis Bank',
       expectedTitle: 'Swiggy',
     },
+    {
+      name: 'Union Bank of India Dr Rs5.00 with Fv. Payee',
+      sms: {
+        id: 'unionb-dr-5',
+        address: 'JK-UNIONB-S',
+        body: 'Union Bank of India A/c*1650 Dr Rs5.00 on 12-11-26 11:00 by MB 631664057015 Fv.VER S, Bal Rs331.57 Not U?Call 18002333/SMS BLOCK 1650 to 8879635472',
+        date: 1794477600000,
+      },
+      expectedAmountPaise: 500,
+      expectedType: 'expense',
+      expectedAccountLast4: '1650',
+      expectedBankName: 'Union Bank',
+      expectedTitle: 'Ver S',
+    },
   ];
 
   const spamCases: SpamCase[] = [
