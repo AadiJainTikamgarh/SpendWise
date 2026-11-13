@@ -1,8 +1,10 @@
 package expo.modules.smsreader
 
 import android.Manifest
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
+import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
@@ -17,6 +19,47 @@ class ExpoSmsReaderModule : Module() {
         context,
         Manifest.permission.READ_SMS
       ) == PackageManager.PERMISSION_GRANTED
+    }
+
+    AsyncFunction("isNotificationListenerEnabledAsync") {
+      val context = appContext.reactContext ?: return@AsyncFunction false
+      val enabledPackages = NotificationManagerCompat.getEnabledListenerPackages(context)
+      enabledPackages.contains(context.packageName)
+    }
+
+    AsyncFunction("openNotificationListenerSettingsAsync") {
+      val context = appContext.reactContext ?: return@AsyncFunction false
+      try {
+        val intent = Intent("android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS").apply {
+          addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        context.startActivity(intent)
+        true
+      } catch (e: Exception) {
+        false
+      }
+    }
+
+    AsyncFunction("isNotificationListenerPausedAsync") {
+      SpendWiseNotificationListenerService.isPaused()
+    }
+
+    AsyncFunction("setNotificationListenerPausedAsync") { paused: Boolean ->
+      SpendWiseNotificationListenerService.setPaused(paused)
+      true
+    }
+
+    AsyncFunction("getActivePaymentNotificationsAsync") {
+      SpendWiseNotificationListenerService.getActivePaymentNotifications()
+    }
+
+    AsyncFunction("getRecentPaymentNotificationsAsync") {
+      SpendWiseNotificationListenerService.getCapturedNotifications()
+    }
+
+    AsyncFunction("clearPaymentNotificationsAsync") {
+      SpendWiseNotificationListenerService.clearCapturedNotifications()
+      true
     }
 
     AsyncFunction("readSmsAsync") { options: Map<String, Any?> ->

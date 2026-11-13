@@ -81,10 +81,11 @@ const BANK_MAPPINGS: { pattern: RegExp; name: string }[] = [
   { pattern: /slice/i, name: 'Slice' },
   { pattern: /jupiter|jupitr/i, name: 'Jupiter' },
   { pattern: /fi\s*money|fibank/i, name: 'Fi Money' },
-  { pattern: /cred/i, name: 'CRED' },
-  { pattern: /phonepe/i, name: 'PhonePe' },
-  { pattern: /gpay|google\s*pay/i, name: 'Google Pay' },
-  { pattern: /bhim/i, name: 'BHIM UPI' },
+  { pattern: /\bcred\b|com\.cred\.app/i, name: 'CRED' },
+  { pattern: /phonepe|com\.phonepe\.app/i, name: 'PhonePe' },
+  { pattern: /gpay|google\s*pay|nbu\.paisa/i, name: 'Google Pay' },
+  { pattern: /paytm|net\.one97\.paytm/i, name: 'Paytm' },
+  { pattern: /bhim|npci\.upiapp/i, name: 'BHIM UPI' },
   { pattern: /amazon\s*pay|amzpay/i, name: 'Amazon Pay' },
   { pattern: /bajaj\s*fin|bajajf/i, name: 'Bajaj Finserv' },
   { pattern: /navi/i, name: 'Navi' },
@@ -122,10 +123,12 @@ const IGNORE_PATTERNS = [
   /\b(?:gift card|bonus cash|cashback of up to|cashback up to|cash back of up to)\b/i,
   /\b(?:save up to|get up to|avail discount|avail offer|exclusive offer)\b/i,
 
-  // 3. Loan & credit card marketing
+  // 3. Loan & credit card marketing (e.g. PhonePe / Paytm card offers)
   /\b(?:pre[- ]?approved|pre[- ]?qualified|instant loan|apply for (?:a )?loan|apply now|get loan)\b/i,
   /\b(?:credit limit (?:increased|upgrade)|upgrade your card|free credit card|no annual fee)\b/i,
   /\b(?:zero down payment|no cost emi|interest free emi|loan offer|personal loan up to)\b/i,
+  /\b(?:buy (?:a )?credit card|apply for (?:a )?credit card|lifetime free credit card|get your credit card)\b/i,
+  /\b(?:check your cibil|check your credit score|free credit score)\b/i,
 
   // 4. Bill generation & due reminders (NOT completed transactions yet)
   /\b(?:bill (?:has been )?generated|e-bill|statement (?:has been )?generated|e-statement)\b/i,
@@ -146,6 +149,12 @@ const IGNORE_PATTERNS = [
   /\b(?:kyc (?:update|pending|expiring|expired)|pan linking|link aadhaar|mandate (?:created|registered|successfully))\b/i,
   /\b(?:login alert|successful login|password changed|profile updated)\b/i,
   /\b(?:balance enquiry|available bal(?:ance)? is|clear bal(?:ance)? is)\b/i,
+
+  // 8. UPI In-App Promotions, Advertising, Insurance, Gold, and Shopping Promos
+  /\b(?:invest in (?:gold|mutual funds|stocks)|digital gold|start sip|gold starting at)\b/i,
+  /\b(?:buy insurance|car insurance|bike insurance|health insurance for|insurance starting at)\b/i,
+  /\b(?:scratch card|reward awaiting|claim reward|unopened scratch card|play and win)\b/i,
+  /\b(?:special offer|limited time deal|shop now and get|cashback on recharge)\b/i,
 ];
 
 // Strict contextual expense patterns grammatically tied to the amount or account
@@ -156,8 +165,8 @@ const STRICT_EXPENSE_PATTERNS = [
   /(?:rs|inr|\u20B9)[:.]?\s*[0-9,]+(?:\.[0-9]{1,2})?\s*(?:(?:has|have)\s+been\s+|was\s+|is\s+)?(?:successfully\s+)?(?:debited|deducted|withdrawn|dr\.?)\b/i,
   // Postfix currency amount before debit verb (e.g. "350.00 INR debited", "350.00 INR was debited")
   /[0-9,]+(?:\.[0-9]{1,2})?\s*(?:rs|inr|\u20B9)[:.]?\s*(?:(?:has|have)\s+been\s+|was\s+|is\s+)?(?:successfully\s+)?(?:debited|deducted|withdrawn|dr\.?)\b/i,
-  // Verb before amount with destination/source
-  /\b(?:paid|spent|sent)[:.]?\s*(?:(?:rs|inr|\u20B9)[:.]?\s*)?[0-9,]+(?:\.[0-9]{1,2})?\s+(?:from|to|at|for|via|on)\b/i,
+  // Verb before amount with optional destination/source (e.g. "Paid ₹132", "Paid ₹132.00 to Chai Point", "Sent: Rs.450.00")
+  /\b(?:paid|spent|sent)[:.]?\s*(?:(?:rs|inr|\u20B9)[:.]?\s*)?[0-9,]+(?:\.[0-9]{1,2})?(?:\s+(?:from|to|at|for|via|on)|\.|\,|$)/i,
   // Prefix currency amount before paid/spent/transferred (e.g. "Rs 1,299.00 was spent", "Rs. 500 spent on")
   /(?:rs|inr|\u20B9)[:.]?\s*[0-9,]+(?:\.[0-9]{1,2})?\s*(?:(?:has|have)\s+been\s+|was\s+|is\s+)?(?:successfully\s+)?(?:paid|spent|transferred)\s+(?:to|at|for|via|on)\b/i,
   // Postfix currency amount before paid/spent/transferred (e.g. "500.00 INR was spent at")
@@ -194,10 +203,14 @@ export function isAllowedSender(address: string, body: string): boolean {
   if (!address) return false;
   const cleanAddress = address.trim();
 
-  // 0. Explicit user imports (Paste Bank SMS tab or Manual paste modal) are always allowed
+  // 0. Explicit user imports and push notifications from financial apps are always allowed
   if (
     cleanAddress.toUpperCase().startsWith('PASTED') ||
-    cleanAddress.toUpperCase() === 'MANUAL'
+    cleanAddress.toUpperCase() === 'MANUAL' ||
+    cleanAddress.toUpperCase().startsWith('NOTIF') ||
+    /^(?:com\.phonepe\.app|com\.google\.android\.apps\.nbu\.paisa\.user|net\.one97\.paytm|com\.cred\.app|in\.org\.npci\.upiapp|in\.amazon\.mShop\.android\.shopping)$/i.test(
+      cleanAddress
+    )
   ) {
     return true;
   }
@@ -279,7 +292,15 @@ export function hasTransactionAnchors(body: string): boolean {
   const hasBalance =
     /\b(?:avl(?:able)?\s*bal|available\s*balance|bal\s*(?:is|inr|rs)|total\s*bal(?:ance)?|bal\s*(?:is\s*)?(?:rs\.?|inr|\u20B9)?\s*[0-9,.]+)/i.test(body);
 
-  return hasAccount || hasReference || hasBalance;
+  // 4. UPI payment success anchor (PhonePe, GPay, Paytm push alerts)
+  const hasPaymentSuccess =
+    /\b(?:paid|sent|received)\s+(?:rs\.?|inr|\u20B9)?\s*[0-9,]+(?:\.[0-9]{1,2})?\s+(?:to|at|for|from|via)\b/i.test(
+      body
+    ) ||
+    /\bpayment\s+(?:to|for)\s+[A-Za-z0-9._\s]+\s+was\s+successful\b/i.test(body) ||
+    /\bmoney\s+(?:sent|received)\s+successfully\b/i.test(body);
+
+  return hasAccount || hasReference || hasBalance || hasPaymentSuccess;
 }
 
 export function detectTransactionType(body: string): TransactionType | null {
@@ -414,6 +435,8 @@ export function extractMerchant(body: string, type: TransactionType): string {
 
   const merchantPatterns = [
     /(?:fv\.?|favouring|fav)\s*[:.]?\s*([A-Za-z0-9&'\-\s]{2,30}?)(?=[,.\s]+(?:bal|avl|on|via|ref|upi|not)|$)/i,
+    /(?:payment\s+to\s+)([A-Za-z0-9._&'\-\s]{2,30}?)(?:\s+(?:was|is|on|via|ref|upi|avl|bal|\.|\,)|$)/i,
+    /(?:payment\s+from\s+)([A-Za-z0-9._&'\-\s]{2,30}?)(?:\s+(?:was|is|on|via|ref|upi|avl|bal|\.|\,)|$)/i,
     /(?:to|at|info\/)\s+([A-Za-z0-9._&'\-\s]{2,30}?)(?:\s+(?:on|via|ref|upi|avl|bal|not|if|using|\.|\,)|$)/i,
     /(?:by\s+(?!rs|inr|\u20B9|\d))([A-Za-z0-9._&'\-\s]{2,30}?)(?:\s+(?:on|via|ref|upi|avl|bal|\.|\,)|$)/i,
     /(?:for\s+(?:purchase of\s+)?)([A-Za-z0-9._&'\-\s]{2,30}?)(?:\s+(?:on|via|ref|upi|avl|bal|\.|\,)|$)/i,
@@ -452,7 +475,7 @@ function cleanTitle(str: string): string {
 
 export function extractReferenceNumber(body: string): string | undefined {
   const patterns = [
-    /(?:ref(?:erence)?\s*(?:no\.?)?|rrn|upi\s*ref(?:erence)?)\s*[:.]?\s*([0-9A-Za-z]{6,20})/i,
+    /(?:ref(?:erence)?\s*(?:no\.?)?|rrn|upi\s*ref(?:erence)?|upi\s*(?:transaction|txn)?\s*(?:id|no\.?|ref(?:erence)?))\s*[:.]?\s*([0-9A-Za-z]{6,25})/i,
     /\b(?:mb|imps|neft|rtgs|txn)\s*(?:no\.?|id|ref)?\s*[:.]?\s*([0-9A-Za-z]{8,20})/i,
     /\bupi\/([0-9]{8,16})\b/i,
   ];

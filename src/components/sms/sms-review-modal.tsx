@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -23,6 +23,7 @@ import { useFinance } from '@/context/finance-context';
 import { useTheme } from '@/hooks/use-theme';
 import { HapticsService } from '@/services/haptics';
 import { ParsedSmsTransaction, smsSyncService } from '@/services/sms';
+import { notificationSyncService } from '@/services/notifications/notification-sync-service';
 import { formatDateLabel } from '@/utils/date';
 import { formatINR } from '@/utils/money';
 
@@ -31,7 +32,7 @@ interface SmsReviewModalProps {
   onClose: () => void;
 }
 
-type SyncTab = 'scan' | 'paste';
+type SyncTab = 'scan' | 'notifications' | 'paste';
 
 const SAMPLE_UNION_BANK_SMS =
   'Union Bank of India A/c*1650 Dr Rs5.00 on 12-11-26 11:00 by MB 631664057015 Fv.VER S, Bal Rs331.57 Not U?Call 18002333/SMS BLOCK 1650 to 8879635472';
@@ -55,6 +56,63 @@ export function SmsReviewModal({ visible, onClose }: SmsReviewModalProps) {
   const [duplicates, setDuplicates] = useState<ParsedSmsTransaction[]>([]);
   const [showDuplicates, setShowDuplicates] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
+  const [isNotifEnabled, setIsNotifEnabled] = useState(false);
+  const [isNotifPaused, setIsNotifPaused] = useState(false);
+
+  useEffect(() => {
+    if (visible && Platform.OS === 'android') {
+      notificationSyncService.isEnabled().then(setIsNotifEnabled);
+      notificationSyncService.isPaused().then(setIsNotifPaused);
+    }
+  }, [visible]);
+
+  const handleTogglePauseNotification = async () => {
+    const nextPaused = !isNotifPaused;
+    await notificationSyncService.setPaused(nextPaused);
+    setIsNotifPaused(nextPaused);
+    HapticsService.selection();
+  };
+
+  const handleScanNotifications = async () => {
+    if (Platform.OS !== 'android') {
+      Alert.alert(
+        'Platform Not Supported for Notifications',
+        'Direct notification tracking requires an Android device with Notification Access enabled.'
+      );
+      return;
+    }
+
+    setIsScanning(true);
+    try {
+      const result = await notificationSyncService.scanNotifications();
+
+      if (!result.isEnabled) {
+        Alert.alert(
+          'Notification Access Required',
+          'SpendWise needs Android Notification Access to capture payment notifications from PhonePe, Google Pay, and Paytm.\n\nWould you like to open Settings to enable it?',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            {
+              text: 'Open Settings',
+              onPress: () => notificationSyncService.openSettings(),
+            },
+          ]
+        );
+        return;
+      }
+
+      setCandidates(result.uniqueTransactions);
+      setDuplicates(result.duplicateTransactions);
+      setSelectedIds(new Set(result.uniqueTransactions.map((t) => t.id)));
+      setHasScanned(true);
+      HapticsService.success();
+    } catch (err: any) {
+      Alert.alert('Notification Scan Failed', err?.message || 'Could not scan notifications');
+    } finally {
+      setIsScanning(false);
+    }
+  };
 
   const handleStartScan = async () => {
     if (Platform.OS !== 'android') {
@@ -243,7 +301,26 @@ export function SmsReviewModal({ visible, onClose }: SmsReviewModalProps) {
                   styles.tabText,
                   { color: activeTab === 'scan' ? theme.primary : theme.textSecondary },
                 ]}>
-                Device Inbox Scan
+                SMS Inbox
+              </ThemedText>
+            </Pressable>
+            <Pressable
+              style={[
+                styles.tabButton,
+                activeTab === 'notifications' && { borderBottomColor: theme.primary, borderBottomWidth: 2 },
+              ]}
+              onPress={() => setActiveTab('notifications')}>
+              <Ionicons
+                name="notifications-outline"
+                size={16}
+                color={activeTab === 'notifications' ? theme.primary : theme.textSecondary}
+              />
+              <ThemedText
+                style={[
+                  styles.tabText,
+                  { color: activeTab === 'notifications' ? theme.primary : theme.textSecondary },
+                ]}>
+                UPI Notifications
               </ThemedText>
             </Pressable>
             <Pressable
@@ -262,7 +339,7 @@ export function SmsReviewModal({ visible, onClose }: SmsReviewModalProps) {
                   styles.tabText,
                   { color: activeTab === 'paste' ? theme.primary : theme.textSecondary },
                 ]}>
-                Paste Bank SMS
+                Paste SMS
               </ThemedText>
             </Pressable>
           </View>
@@ -324,8 +401,111 @@ export function SmsReviewModal({ visible, onClose }: SmsReviewModalProps) {
                 )}
               </ScalePressable>
             </ScrollView>
+          ) : activeTab === 'notifications' ? (
+            /* Tab 2: UPI Notifications */
+            <ScrollView contentContainerStyle={styles.preScanContainer}>
+              <View style={[styles.infoCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
+                <Ionicons name="notifications" size={32} color="#8B5CF6" style={{ marginBottom: 12 }} />
+                <ThemedText style={styles.infoTitle}>UPI App Notifications</ThemedText>
+                <ThemedText style={styles.infoText} themeColor="textSecondary">
+                  Auto-captures real-time transactions from PhonePe, Google Pay, Paytm, and CRED. Promotional ads, loans, and scratch card rewards are strictly filtered out.
+                </ThemedText>
+              </View>
+
+              <View style={[styles.infoCard, { backgroundColor: theme.card, borderColor: theme.border, marginTop: 12 }]}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                  <ThemedText style={{ fontFamily: FontFamily.semiBold, fontSize: 15 }}>Listener Status</ThemedText>
+                  <View style={{
+                    paddingHorizontal: 10,
+                    paddingVertical: 4,
+                    borderRadius: 12,
+                    backgroundColor: isNotifEnabled ? (isNotifPaused ? '#F59E0B20' : '#10B98120') : '#EF444420',
+                  }}>
+                    <ThemedText style={{
+                      fontSize: 12,
+                      fontFamily: FontFamily.medium,
+                      color: isNotifEnabled ? (isNotifPaused ? '#F59E0B' : '#10B981') : '#EF4444',
+                    }}>
+                      {isNotifEnabled ? (isNotifPaused ? 'Paused' : 'Active') : 'Disabled'}
+                    </ThemedText>
+                  </View>
+                </View>
+
+                <ThemedText style={{ fontSize: 13, color: theme.textSecondary, marginBottom: 12 }}>
+                  {isNotifEnabled
+                    ? isNotifPaused
+                      ? 'Tracking is paused. You can resume tracking here or directly from the ongoing Android notification shade.'
+                      : 'Actively monitoring PhonePe, GPay & Paytm payments. You can pause anytime from the ongoing notification shade.'
+                    : 'Android Notification Access is required so SpendWise can capture payments when banks omit SMS.'}
+                </ThemedText>
+
+                {isNotifEnabled ? (
+                  <Pressable
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      paddingVertical: 10,
+                      borderRadius: 8,
+                      backgroundColor: isNotifPaused ? '#10B98115' : '#F59E0B15',
+                      borderWidth: 1,
+                      borderColor: isNotifPaused ? '#10B981' : '#F59E0B',
+                    }}
+                    onPress={handleTogglePauseNotification}>
+                    <Ionicons
+                      name={isNotifPaused ? 'play' : 'pause'}
+                      size={16}
+                      color={isNotifPaused ? '#10B981' : '#F59E0B'}
+                      style={{ marginRight: 6 }}
+                    />
+                    <ThemedText
+                      style={{
+                        color: isNotifPaused ? '#10B981' : '#F59E0B',
+                        fontFamily: FontFamily.semiBold,
+                        fontSize: 14,
+                      }}>
+                      {isNotifPaused ? 'Resume Notification Tracking' : 'Pause Notification Tracking'}
+                    </ThemedText>
+                  </Pressable>
+                ) : (
+                  <Pressable
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      paddingVertical: 10,
+                      borderRadius: 8,
+                      backgroundColor: theme.primary,
+                    }}
+                    onPress={() => notificationSyncService.openSettings()}>
+                    <Ionicons name="settings-outline" size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
+                    <ThemedText style={{ color: '#FFFFFF', fontFamily: FontFamily.semiBold, fontSize: 14 }}>
+                      Enable in Android Settings
+                    </ThemedText>
+                  </Pressable>
+                )}
+              </View>
+
+              <View style={{ height: 24 }} />
+
+              <ScalePressable
+                scaleTo={0.97}
+                haptic="medium"
+                style={[styles.primaryButton, { backgroundColor: theme.primary }]}
+                onPress={handleScanNotifications}
+                disabled={isScanning}>
+                {isScanning ? (
+                  <ActivityIndicator color="#FFFFFF" />
+                ) : (
+                  <>
+                    <Ionicons name="refresh-outline" size={20} color="#FFFFFF" style={{ marginRight: 8 }} />
+                    <ThemedText style={styles.primaryButtonText}>Scan Active UPI Notifications</ThemedText>
+                  </>
+                )}
+              </ScalePressable>
+            </ScrollView>
           ) : (
-            /* Tab 2: Paste Bank SMS */
+            /* Tab 3: Paste Bank SMS */
             <ScrollView contentContainerStyle={styles.preScanContainer} keyboardShouldPersistTaps="handled">
               <View style={[styles.infoCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
                 <Ionicons name="clipboard" size={28} color="#6366F1" style={{ marginBottom: 8 }} />

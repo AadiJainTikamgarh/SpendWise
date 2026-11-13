@@ -13,11 +13,26 @@ export interface RawSmsMessage {
   date: number;
 }
 
+export interface RawPaymentNotification {
+  id: string;
+  packageName: string;
+  title: string;
+  text: string;
+  timestamp: number;
+}
+
 export type SmsPermissionResult = 'granted' | 'denied' | 'never_ask_again';
 
 let nativeModule: {
   hasPermissionsAsync(): Promise<boolean>;
   readSmsAsync(options: { maxCount?: number; minDate?: number }): Promise<RawSmsMessage[]>;
+  isNotificationListenerEnabledAsync(): Promise<boolean>;
+  openNotificationListenerSettingsAsync(): Promise<boolean>;
+  getActivePaymentNotificationsAsync(): Promise<RawPaymentNotification[]>;
+  getRecentPaymentNotificationsAsync(): Promise<RawPaymentNotification[]>;
+  clearPaymentNotificationsAsync(): Promise<boolean>;
+  isNotificationListenerPausedAsync(): Promise<boolean>;
+  setNotificationListenerPausedAsync(paused: boolean): Promise<boolean>;
 } | null = null;
 
 try {
@@ -82,5 +97,72 @@ export async function readInboxSms(options?: ReadSmsOptions): Promise<RawSmsMess
   } catch (error) {
     console.error('Failed to read SMS:', error);
     return [];
+  }
+}
+
+export function isNotificationListenerAvailable(): boolean {
+  return Platform.OS === 'android' && nativeModule !== null;
+}
+
+export async function isNotificationListenerEnabled(): Promise<boolean> {
+  if (Platform.OS !== 'android' || !nativeModule) return false;
+  try {
+    return await nativeModule.isNotificationListenerEnabledAsync();
+  } catch {
+    return false;
+  }
+}
+
+export async function openNotificationListenerSettings(): Promise<boolean> {
+  if (Platform.OS !== 'android' || !nativeModule) return false;
+  try {
+    return await nativeModule.openNotificationListenerSettingsAsync();
+  } catch {
+    return false;
+  }
+}
+
+export async function getActivePaymentNotifications(): Promise<RawPaymentNotification[]> {
+  if (Platform.OS !== 'android' || !nativeModule) return [];
+  try {
+    return await nativeModule.getActivePaymentNotificationsAsync();
+  } catch {
+    return [];
+  }
+}
+
+export async function getRecentPaymentNotifications(): Promise<RawPaymentNotification[]> {
+  if (Platform.OS !== 'android' || !nativeModule) return [];
+  try {
+    return await nativeModule.getRecentPaymentNotificationsAsync();
+  } catch {
+    return [];
+  }
+}
+
+export async function clearPaymentNotifications(): Promise<boolean> {
+  if (Platform.OS !== 'android' || !nativeModule) return false;
+  try {
+    return await nativeModule.clearPaymentNotificationsAsync();
+  } catch {
+    return false;
+  }
+}
+
+export async function isNotificationListenerPaused(): Promise<boolean> {
+  if (Platform.OS !== 'android' || !nativeModule) return false;
+  try {
+    return await nativeModule.isNotificationListenerPausedAsync();
+  } catch {
+    return false;
+  }
+}
+
+export async function setNotificationListenerPaused(paused: boolean): Promise<boolean> {
+  if (Platform.OS !== 'android' || !nativeModule) return false;
+  try {
+    return await nativeModule.setNotificationListenerPausedAsync(paused);
+  } catch {
+    return false;
   }
 }

@@ -335,6 +335,50 @@ export function runParserTests(): TestResult {
       expectedAccountLast4: '4321',
       expectedBankName: 'State Bank of India',
     },
+    // --- UPI Notification Listener Samples ---
+    {
+      name: 'PhonePe UPI Notification Debit',
+      sms: {
+        id: 'phonepe-notif-1',
+        address: 'com.phonepe.app',
+        body: 'Paid ₹132. Payment to Reliance Fresh was successful. Debited from Bank A/c *1650. UPI Ref: 132454856645',
+        date: 1793975511000,
+      },
+      expectedAmountPaise: 13200,
+      expectedType: 'expense',
+      expectedTitle: 'Reliance Fresh',
+      expectedAccountLast4: '1650',
+      expectedReferenceNo: '132454856645',
+      expectedBankName: 'PhonePe',
+    },
+    {
+      name: 'Google Pay Notification Debit',
+      sms: {
+        id: 'gpay-notif-1',
+        address: 'com.google.android.apps.nbu.paisa.user',
+        body: 'Paid ₹132.00 to Chai Point. Using Bank Account ending 1650. UPI transaction ID: 132454856645',
+        date: 1793975511000,
+      },
+      expectedAmountPaise: 13200,
+      expectedType: 'expense',
+      expectedTitle: 'Chai Point',
+      expectedAccountLast4: '1650',
+      expectedReferenceNo: '132454856645',
+      expectedBankName: 'Google Pay',
+    },
+    {
+      name: 'PhonePe Income Notification',
+      sms: {
+        id: 'phonepe-notif-inc',
+        address: 'com.phonepe.app',
+        body: 'Received ₹500 from Rahul. Payment was successful via PhonePe. Credited to Bank A/c *1650.',
+        date: 1793975511000,
+      },
+      expectedAmountPaise: 50000,
+      expectedType: 'income',
+      expectedAccountLast4: '1650',
+      expectedBankName: 'PhonePe',
+    },
     {
       name: 'Airtel Payments Bank Debit (AD-AIRBNK-T)',
       sms: {
@@ -513,6 +557,47 @@ export function runParserTests(): TestResult {
         date: 1794219600000,
       },
       reason: 'KYC maintenance notice without transaction',
+    },
+    // --- UPI In-App Advertisement & Promotional Notification Tests ---
+    {
+      name: 'PhonePe Pre-Approved Loan Notification Ad (Must be rejected)',
+      sms: {
+        id: 'spam-notif-loan',
+        address: 'com.phonepe.app',
+        body: 'Special loan offer! Get pre-approved personal loan up to ₹5,00,000 at zero processing fee. Tap to claim.',
+        date: 1794477600000,
+      },
+      reason: 'Contains pre-approved personal loan offer keywords, rejected by Layer 2',
+    },
+    {
+      name: 'Google Pay Scratch Card / Reward Notification Ad (Must be rejected)',
+      sms: {
+        id: 'spam-notif-scratch',
+        address: 'com.google.android.apps.nbu.paisa.user',
+        body: 'You earned a scratch card! Win up to ₹100 cashback on your next payment. Claim reward now.',
+        date: 1794477600000,
+      },
+      reason: 'Contains scratch card reward marketing keywords, rejected by Layer 2',
+    },
+    {
+      name: 'PhonePe Lifetime Free Credit Card Notification Ad (Must be rejected)',
+      sms: {
+        id: 'spam-notif-card',
+        address: 'com.phonepe.app',
+        body: 'Apply for lifetime free credit card today. Check your free credit score on PhonePe in seconds.',
+        date: 1794477600000,
+      },
+      reason: 'Contains credit card marketing and credit score keywords, rejected by Layer 2',
+    },
+    {
+      name: 'Paytm Digital Gold Investment Notification Ad (Must be rejected)',
+      sms: {
+        id: 'spam-notif-gold',
+        address: 'net.one97.paytm',
+        body: 'Invest in digital gold starting at ₹10. Limited period offer on Paytm Gold. Shop now.',
+        date: 1794477600000,
+      },
+      reason: 'Contains digital gold investment marketing keywords, rejected by Layer 2',
     },
     // --- Verbatim Spam & Marketing Samples from ORIGINAL_REQUEST.md ---
     {
