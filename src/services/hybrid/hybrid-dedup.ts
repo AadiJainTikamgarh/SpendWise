@@ -122,6 +122,21 @@ export function deduplicateAgainstExisting<T extends CandidateTransaction>(
 
       // 5. If within tight 2-hour window and same amount/type
       if (diffMs <= 2 * 60 * 60 * 1000) {
+        // If both transactions have distinct reference IDs and they differ, they are distinct transactions
+        if (candidate.referenceNo && tx.rawReference) {
+          const cRef = candidate.referenceNo.trim().toLowerCase();
+          const tRef = tx.rawReference.trim().toLowerCase();
+          if (cRef !== tRef && !cRef.includes(tRef) && !tRef.includes(cRef)) {
+            return false;
+          }
+        }
+        // If candidate and existing have distinct, non-generic merchant names that are not similar, do not false-dupe
+        const genericNames = ['bank expense', 'bank transaction', 'deposit / received', 'expense', 'income'];
+        const isCGeneric = genericNames.includes(candidate.title.toLowerCase());
+        const isTGeneric = genericNames.includes(tx.title.toLowerCase());
+        if (!isCGeneric && !isTGeneric && !areTitlesSimilar(candidate.title, tx.title)) {
+          return false;
+        }
         return true;
       }
 

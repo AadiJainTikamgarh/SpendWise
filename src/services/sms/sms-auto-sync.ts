@@ -163,10 +163,10 @@ export function runSilentSmsAutoSync(options?: AutoSyncOptions): Promise<AutoSyn
       // Set in-memory cooldown timestamp immediately to protect subsequent checks
       inMemoryLastSyncTimestamp = now;
 
-      // Scan recent messages (last 7 days, max 60 messages to remain lightweight)
-      const daysBack = 7;
+      // Scan recent messages (last 14 days, max 150 messages to remain lightweight but comprehensive)
+      const daysBack = 14;
       const minDate = now - daysBack * 24 * 60 * 60 * 1000;
-      const rawMessages = await readInboxSms({ maxCount: 60, minDate });
+      const rawMessages = await readInboxSms({ maxCount: 150, minDate });
 
       if (!rawMessages || rawMessages.length === 0) {
         await AsyncStorage.setItem(STORAGE_KEY_LAST_SYNC_TIMESTAMP, String(now));

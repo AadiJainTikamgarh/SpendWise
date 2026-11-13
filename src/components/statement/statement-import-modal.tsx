@@ -53,6 +53,10 @@ Payment Method: Amazon Pay UPI
 Trip ID: ub-92847291`,
   },
   {
+    name: 'Union Bank SMS',
+    text: `Union Bank of India A/c*1650 Dr Rs5.00 on 12-11-26 11:00 by MB 631664057015 Fv.VER S, Bal Rs331.57 Not U?Call 18002333/SMS BLOCK 1650 to 8879635472`,
+  },
+  {
     name: 'Bank CSV Statement',
     text: `Date,Narration,Debit,Credit,Ref No
 09/11/2026,UPI/4314241/SWIGGY/HDFC,450.00,,4314241241
@@ -211,7 +215,7 @@ export function StatementImportModal({ visible, onClose }: StatementImportModalP
               <Ionicons name="sparkles" size={24} color="#6366F1" style={{ marginBottom: 8 }} />
               <ThemedText style={styles.infoTitle}>Universal Hybrid Ingestion</ThemedText>
               <ThemedText style={styles.infoText} themeColor="textSecondary">
-                Paste any email receipt (Swiggy, Amazon, Uber) or bank statement CSV rows. SpendWise auto-detects dates, amounts, merchants, and prevents duplicate records!
+                Paste any bank transaction SMS, email receipt (Swiggy, Amazon, Uber), or bank statement CSV rows. SpendWise auto-detects dates, amounts, merchants, and prevents duplicate records!
               </ThemedText>
             </View>
 

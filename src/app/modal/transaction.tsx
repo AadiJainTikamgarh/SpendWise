@@ -32,6 +32,7 @@ import { FontFamily, Spacing } from '@/constants/theme';
 import { useFinance } from '@/context/finance-context';
 import { useTheme } from '@/hooks/use-theme';
 import { HapticsService } from '@/services/haptics';
+import { parseSms } from '@/services/sms';
 import { TransactionType } from '@/types/finance';
 import { formatDateLabel, formatTime, isSameDay } from '@/utils/date';
 import { paiseToRupees, parseCurrencyInput } from '@/utils/money';
@@ -93,8 +94,38 @@ export default function TransactionModal() {
   const [showCategoryPicker, setShowCategoryPicker] = useState(false);
   const [showAccountPicker, setShowAccountPicker] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
+  const [showPasteSmsModal, setShowPasteSmsModal] = useState(false);
+  const [smsTextToParse, setSmsTextToParse] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  const handleFillFromSms = (text: string) => {
+    if (!text.trim()) {
+      Alert.alert('Empty Input', 'Please paste a bank SMS message.');
+      return;
+    }
+    const parsed = parseSms({
+      id: `paste_${Date.now()}`,
+      address: 'PASTED-SMS',
+      body: text.trim(),
+      date: Date.now(),
+    });
+    if (!parsed) {
+      Alert.alert('Could Not Parse SMS', 'No recognized bank debit or credit was found in the text.');
+      return;
+    }
+    setAmountInput(paiseToRupees(parsed.amount).toString());
+    setType(parsed.type);
+    setCategoryId(parsed.categoryId);
+    setTitle(parsed.title);
+    setAccount('UPI / Online');
+    setNotes(
+      `Auto-filled from ${parsed.bankName}${parsed.accountLast4 ? ` | A/C *${parsed.accountLast4}` : ''}${parsed.referenceNo ? ` | Ref: ${parsed.referenceNo}` : ''}`
+    );
+    setShowPasteSmsModal(false);
+    setSmsTextToParse('');
+    HapticsService.success();
+  };
 
   const amountScale = useSharedValue(1);
   const amountAnimatedStyle = useAnimatedStyle(() => ({
@@ -223,7 +254,28 @@ export default function TransactionModal() {
               {isEditing ? 'Edit Transaction' : 'Add Transaction'}
             </ThemedText>
 
-            <View style={{ width: 32 }} />
+            {!isEditing ? (
+              <ScalePressable
+                scaleTo={0.92}
+                haptic="selection"
+                onPress={() => setShowPasteSmsModal(true)}
+                style={[
+                  styles.smsQuickBtn,
+                  { backgroundColor: `${theme.primary}18`, borderColor: `${theme.primary}40` },
+                ]}>
+                <Ionicons
+                  name="chatbox-ellipses-outline"
+                  size={14}
+                  color={theme.primary}
+                  style={{ marginRight: 4 }}
+                />
+                <ThemedText style={[styles.smsQuickBtnText, { color: theme.primary }]}>
+                  Paste SMS
+                </ThemedText>
+              </ScalePressable>
+            ) : (
+              <View style={{ width: 32 }} />
+            )}
           </View>
 
           <ScrollView
@@ -607,6 +659,62 @@ export default function TransactionModal() {
             </View>
           </Modal>
 
+          {/* Quick Paste SMS Autofill Modal */}
+          <Modal
+            visible={showPasteSmsModal}
+            transparent
+            animationType="slide"
+            onRequestClose={() => setShowPasteSmsModal(false)}>
+            <View style={styles.pickerOverlay}>
+              <View
+                style={[
+                  styles.pickerCard,
+                  {
+                    backgroundColor: theme.card,
+                    borderColor: theme.border,
+                    paddingBottom: Math.max(20, insets.bottom + 16),
+                  },
+                ]}>
+                <View style={styles.pickerHeader}>
+                  <ThemedText style={styles.pickerTitle}>Autofill from Bank SMS</ThemedText>
+                  <Pressable onPress={() => setShowPasteSmsModal(false)} hitSlop={10}>
+                    <Ionicons name="close" size={22} color={theme.text} />
+                  </Pressable>
+                </View>
+
+                <ThemedText style={styles.pickerSubtitle} themeColor="textSecondary">
+                  Paste any SMS from Union Bank, SBI, HDFC, ICICI, etc., and SpendWise will automatically fill the amount, merchant, and category!
+                </ThemedText>
+
+                <TextInput
+                  style={[
+                    styles.modalSmsInput,
+                    {
+                      backgroundColor: theme.background,
+                      borderColor: theme.border,
+                      color: theme.text,
+                    },
+                  ]}
+                  placeholder="Paste bank transaction SMS here..."
+                  placeholderTextColor={theme.textSecondary}
+                  value={smsTextToParse}
+                  onChangeText={setSmsTextToParse}
+                  multiline
+                  numberOfLines={4}
+                  textAlignVertical="top"
+                />
+
+                <ScalePressable
+                  scaleTo={0.97}
+                  haptic="medium"
+                  style={[styles.submitBtn, { backgroundColor: theme.primary, marginTop: 14 }]}
+                  onPress={() => handleFillFromSms(smsTextToParse)}>
+                  <ThemedText style={styles.submitBtnText}>Autofill Transaction</ThemedText>
+                </ScalePressable>
+              </View>
+            </View>
+          </Modal>
+
         </KeyboardAvoidingView>
       </SafeAreaView>
     </ThemedView>
@@ -869,5 +977,32 @@ const styles = StyleSheet.create({
   dateItemText: {
     fontFamily: FontFamily.medium,
     fontSize: 13,
+  },
+  smsQuickBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 14,
+    borderWidth: 1,
+  },
+  smsQuickBtnText: {
+    fontSize: 12,
+    fontFamily: FontFamily.bold,
+  },
+  modalSmsInput: {
+    borderRadius: 12,
+    borderWidth: 1,
+    padding: 12,
+    fontSize: 13,
+    fontFamily: FontFamily.regular,
+    minHeight: 90,
+    marginTop: 10,
+  },
+  pickerSubtitle: {
+    fontSize: 13,
+    fontFamily: FontFamily.regular,
+    marginBottom: 10,
+    lineHeight: 18,
   },
 });

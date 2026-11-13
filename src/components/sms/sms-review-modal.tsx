@@ -8,7 +8,9 @@ import {
   Modal,
   Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
+  TextInput,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -29,24 +31,36 @@ interface SmsReviewModalProps {
   onClose: () => void;
 }
 
+type SyncTab = 'scan' | 'paste';
+
+const SAMPLE_UNION_BANK_SMS =
+  'Union Bank of India A/c*1650 Dr Rs5.00 on 12-11-26 11:00 by MB 631664057015 Fv.VER S, Bal Rs331.57 Not U?Call 18002333/SMS BLOCK 1650 to 8879635472';
+
+const SAMPLE_HDFC_SMS =
+  'Rs 1,299.00 was spent on your HDFC Bank Card 5678 at AMAZON on 10-NOV-26. Bal: Rs 34,000.';
+
 export function SmsReviewModal({ visible, onClose }: SmsReviewModalProps) {
   const theme = useTheme();
   const { user } = useAuth();
   const { refreshData } = useFinance();
 
+  const [activeTab, setActiveTab] = useState<SyncTab>('scan');
   const [isScanning, setIsScanning] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const [hasScanned, setHasScanned] = useState(false);
   const [daysBack, setDaysBack] = useState<number>(30);
+  const [pastedText, setPastedText] = useState('');
+
   const [candidates, setCandidates] = useState<ParsedSmsTransaction[]>([]);
+  const [duplicates, setDuplicates] = useState<ParsedSmsTransaction[]>([]);
+  const [showDuplicates, setShowDuplicates] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [duplicateCount, setDuplicateCount] = useState(0);
 
   const handleStartScan = async () => {
     if (Platform.OS !== 'android') {
       Alert.alert(
-        'Platform Not Supported',
-        'Direct SMS scanning is only available on Android devices. On iOS or Web, please use manual transaction entry or statement import.'
+        'Platform Not Supported for Direct Inbox Scan',
+        'Direct background inbox scanning requires Android telephony permissions. On iOS, Web, or Expo Go, please use the "Paste Bank SMS" tab to parse your messages instantly!'
       );
       return;
     }
@@ -57,8 +71,8 @@ export function SmsReviewModal({ visible, onClose }: SmsReviewModalProps) {
 
       if (!result.isModuleAvailable) {
         Alert.alert(
-          'Rebuild Required',
-          'Native SMS reader requires a local development build.\n\nIf you are running in Expo Go or haven\'t rebuilt the APK since adding SMS features, please run:\n\nnpm run android\n\n(Custom native modules and SMS permissions cannot run inside standard Expo Go).'
+          'Native Module Unavailable (Expo Go)',
+          'Direct SMS reading requires custom native Android code.\n\nIf you are using Expo Go, direct inbox access is blocked by Expo Go restrictions. You can switch to the "Paste Bank SMS" tab above to import your SMS transactions instantly!'
         );
         return;
       }
@@ -83,11 +97,41 @@ export function SmsReviewModal({ visible, onClose }: SmsReviewModalProps) {
       }
 
       setCandidates(result.uniqueTransactions);
-      setDuplicateCount(result.duplicateTransactions.length);
+      setDuplicates(result.duplicateTransactions);
       setSelectedIds(new Set(result.uniqueTransactions.map((t) => t.id)));
       setHasScanned(true);
     } catch (err: any) {
       Alert.alert('Scan Failed', err?.message || 'Could not scan SMS inbox');
+    } finally {
+      setIsScanning(false);
+    }
+  };
+
+  const handleParsePastedSms = async () => {
+    if (!pastedText.trim()) {
+      Alert.alert('Empty Input', 'Please paste one or more bank SMS messages into the text box.');
+      return;
+    }
+
+    setIsScanning(true);
+    try {
+      const result = await smsSyncService.parsePastedSms(pastedText);
+
+      if (result.uniqueTransactions.length === 0 && result.duplicateTransactions.length === 0) {
+        Alert.alert(
+          'No Transactions Recognized',
+          'Could not find valid bank debit/credit patterns or transaction amounts in the text provided.\n\nPlease ensure the text contains a recognized bank, amount (e.g. "Dr Rs5.00" or "debited by Rs 500"), and account or reference number.'
+        );
+        return;
+      }
+
+      setCandidates(result.uniqueTransactions);
+      setDuplicates(result.duplicateTransactions);
+      setSelectedIds(new Set(result.uniqueTransactions.map((t) => t.id)));
+      setHasScanned(true);
+      HapticsService.success();
+    } catch (err: any) {
+      Alert.alert('Parse Failed', err?.message || 'Could not parse SMS text');
     } finally {
       setIsScanning(false);
     }
@@ -106,17 +150,19 @@ export function SmsReviewModal({ visible, onClose }: SmsReviewModalProps) {
     });
   };
 
+  const displayList = showDuplicates ? [...candidates, ...duplicates] : candidates;
+
   const toggleSelectAll = () => {
     HapticsService.selection();
-    if (selectedIds.size === candidates.length) {
+    if (selectedIds.size === displayList.length) {
       setSelectedIds(new Set());
     } else {
-      setSelectedIds(new Set(candidates.map((t) => t.id)));
+      setSelectedIds(new Set(displayList.map((t) => t.id)));
     }
   };
 
   const handleImport = async () => {
-    const toImport = candidates.filter((c) => selectedIds.has(c.id));
+    const toImport = displayList.filter((c) => selectedIds.has(c.id));
     if (toImport.length === 0) {
       Alert.alert('No Transactions Selected', 'Please select at least one transaction to import.');
       return;
@@ -136,6 +182,8 @@ export function SmsReviewModal({ visible, onClose }: SmsReviewModalProps) {
             onPress: () => {
               setHasScanned(false);
               setCandidates([]);
+              setDuplicates([]);
+              setPastedText('');
               onClose();
             },
           },
@@ -148,7 +196,7 @@ export function SmsReviewModal({ visible, onClose }: SmsReviewModalProps) {
     }
   };
 
-  const totalPaiseSelected = candidates
+  const totalPaiseSelected = displayList
     .filter((c) => selectedIds.has(c.id) && c.type === 'expense')
     .reduce((acc, c) => acc + c.amount, 0);
 
@@ -164,7 +212,7 @@ export function SmsReviewModal({ visible, onClose }: SmsReviewModalProps) {
             <View>
               <ThemedText style={styles.title}>Bank SMS Sync</ThemedText>
               <ThemedText style={styles.subtitle} themeColor="textSecondary">
-                Auto-detect UPI & card transactions
+                Auto-detect Union Bank, SBI, HDFC & UPI debits
               </ThemedText>
             </View>
           </View>
@@ -173,61 +221,173 @@ export function SmsReviewModal({ visible, onClose }: SmsReviewModalProps) {
           </Pressable>
         </View>
 
-        {!hasScanned ? (
-          /* Pre-scan / Configuration Screen */
-          <View style={styles.preScanContainer}>
-            <View style={[styles.infoCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
-              <Ionicons name="shield-checkmark" size={32} color="#10B981" style={{ marginBottom: 12 }} />
-              <ThemedText style={styles.infoTitle}>Private & Local</ThemedText>
-              <ThemedText style={styles.infoText} themeColor="textSecondary">
-                SpendWise only scans bank transactional SMS (HDFC, SBI, ICICI, UPI, etc.). OTPs and personal messages are completely ignored and never stored.
+        {/* Tab Switcher (Inbox Scan vs Paste SMS) */}
+        {!hasScanned && (
+          <View style={[styles.tabBar, { borderBottomColor: theme.border, backgroundColor: theme.card }]}>
+            <Pressable
+              style={[
+                styles.tabButton,
+                activeTab === 'scan' && { borderBottomColor: theme.primary, borderBottomWidth: 2 },
+              ]}
+              onPress={() => setActiveTab('scan')}>
+              <Ionicons
+                name="phone-portrait-outline"
+                size={16}
+                color={activeTab === 'scan' ? theme.primary : theme.textSecondary}
+              />
+              <ThemedText
+                style={[
+                  styles.tabText,
+                  { color: activeTab === 'scan' ? theme.primary : theme.textSecondary },
+                ]}>
+                Device Inbox Scan
               </ThemedText>
-            </View>
-
-            <ThemedText style={styles.sectionHeading}>Scan Duration</ThemedText>
-            <View style={styles.daysSelectorRow}>
-              {[7, 30, 90].map((days) => (
-                <ScalePressable
-                  key={days}
-                  scaleTo={0.94}
-                  haptic="selection"
-                  style={[
-                    styles.dayPill,
-                    {
-                      backgroundColor: daysBack === days ? theme.primary : theme.card,
-                      borderColor: daysBack === days ? theme.primary : theme.border,
-                    },
-                  ]}
-                  onPress={() => setDaysBack(days)}>
-                  <ThemedText
-                    style={[
-                      styles.dayPillText,
-                      { color: daysBack === days ? '#FFFFFF' : theme.text },
-                    ]}>
-                    Last {days} Days
-                  </ThemedText>
-                </ScalePressable>
-              ))}
-            </View>
-
-            <View style={{ flex: 1 }} />
-
-            <ScalePressable
-              scaleTo={0.97}
-              haptic="medium"
-              style={[styles.primaryButton, { backgroundColor: theme.primary }]}
-              onPress={handleStartScan}
-              disabled={isScanning}>
-              {isScanning ? (
-                <ActivityIndicator color="#FFFFFF" />
-              ) : (
-                <>
-                  <Ionicons name="scan-outline" size={20} color="#FFFFFF" style={{ marginRight: 8 }} />
-                  <ThemedText style={styles.primaryButtonText}>Scan SMS Inbox</ThemedText>
-                </>
-              )}
-            </ScalePressable>
+            </Pressable>
+            <Pressable
+              style={[
+                styles.tabButton,
+                activeTab === 'paste' && { borderBottomColor: theme.primary, borderBottomWidth: 2 },
+              ]}
+              onPress={() => setActiveTab('paste')}>
+              <Ionicons
+                name="clipboard-outline"
+                size={16}
+                color={activeTab === 'paste' ? theme.primary : theme.textSecondary}
+              />
+              <ThemedText
+                style={[
+                  styles.tabText,
+                  { color: activeTab === 'paste' ? theme.primary : theme.textSecondary },
+                ]}>
+                Paste Bank SMS
+              </ThemedText>
+            </Pressable>
           </View>
+        )}
+
+        {!hasScanned ? (
+          activeTab === 'scan' ? (
+            /* Tab 1: Device Inbox Scan */
+            <ScrollView contentContainerStyle={styles.preScanContainer}>
+              <View style={[styles.infoCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
+                <Ionicons name="shield-checkmark" size={32} color="#10B981" style={{ marginBottom: 12 }} />
+                <ThemedText style={styles.infoTitle}>Private & Local</ThemedText>
+                <ThemedText style={styles.infoText} themeColor="textSecondary">
+                  SpendWise scans local bank transactional SMS (Union Bank, SBI, HDFC, ICICI, etc.). OTPs and personal messages are completely ignored and never leave your device.
+                </ThemedText>
+              </View>
+
+              <ThemedText style={styles.sectionHeading}>Scan Duration</ThemedText>
+              <View style={styles.daysSelectorRow}>
+                {[7, 30, 60, 90, 180].map((days) => (
+                  <ScalePressable
+                    key={days}
+                    scaleTo={0.94}
+                    haptic="selection"
+                    style={[
+                      styles.dayPill,
+                      {
+                        backgroundColor: daysBack === days ? theme.primary : theme.card,
+                        borderColor: daysBack === days ? theme.primary : theme.border,
+                      },
+                    ]}
+                    onPress={() => setDaysBack(days)}>
+                    <ThemedText
+                      style={[
+                        styles.dayPillText,
+                        { color: daysBack === days ? '#FFFFFF' : theme.text },
+                      ]}>
+                      {days}d
+                    </ThemedText>
+                  </ScalePressable>
+                ))}
+              </View>
+
+              <View style={{ height: 24 }} />
+
+              <ScalePressable
+                scaleTo={0.97}
+                haptic="medium"
+                style={[styles.primaryButton, { backgroundColor: theme.primary }]}
+                onPress={handleStartScan}
+                disabled={isScanning}>
+                {isScanning ? (
+                  <ActivityIndicator color="#FFFFFF" />
+                ) : (
+                  <>
+                    <Ionicons name="scan-outline" size={20} color="#FFFFFF" style={{ marginRight: 8 }} />
+                    <ThemedText style={styles.primaryButtonText}>Scan SMS Inbox ({daysBack} Days)</ThemedText>
+                  </>
+                )}
+              </ScalePressable>
+            </ScrollView>
+          ) : (
+            /* Tab 2: Paste Bank SMS */
+            <ScrollView contentContainerStyle={styles.preScanContainer} keyboardShouldPersistTaps="handled">
+              <View style={[styles.infoCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
+                <Ionicons name="clipboard" size={28} color="#6366F1" style={{ marginBottom: 8 }} />
+                <ThemedText style={styles.infoTitle}>Paste Any Bank SMS</ThemedText>
+                <ThemedText style={styles.infoText} themeColor="textSecondary">
+                  Copy any transactional SMS from Union Bank, SBI, HDFC, etc., and paste it here. Works everywhere (including Expo Go and iOS).
+                </ThemedText>
+              </View>
+
+              <View style={styles.templateHeaderRow}>
+                <ThemedText style={styles.sectionHeading}>Try Sample SMS</ThemedText>
+              </View>
+              <View style={styles.sampleChipRow}>
+                <Pressable
+                  style={[styles.sampleChip, { backgroundColor: theme.card, borderColor: theme.border }]}
+                  onPress={() => setPastedText(SAMPLE_UNION_BANK_SMS)}>
+                  <Ionicons name="document-text-outline" size={14} color={theme.primary} style={{ marginRight: 6 }} />
+                  <ThemedText style={styles.sampleChipText}>Union Bank SMS</ThemedText>
+                </Pressable>
+                <Pressable
+                  style={[styles.sampleChip, { backgroundColor: theme.card, borderColor: theme.border }]}
+                  onPress={() => setPastedText(SAMPLE_HDFC_SMS)}>
+                  <Ionicons name="document-text-outline" size={14} color={theme.primary} style={{ marginRight: 6 }} />
+                  <ThemedText style={styles.sampleChipText}>HDFC Card SMS</ThemedText>
+                </Pressable>
+              </View>
+
+              <ThemedText style={[styles.sectionHeading, { marginTop: 16 }]}>Paste Message Text</ThemedText>
+              <TextInput
+                style={[
+                  styles.textAreaInput,
+                  {
+                    backgroundColor: theme.card,
+                    borderColor: theme.border,
+                    color: theme.text,
+                  },
+                ]}
+                placeholder="Paste transaction SMS message here (e.g. Union Bank of India A/c*1650 Dr Rs5.00...)..."
+                placeholderTextColor={theme.textSecondary}
+                value={pastedText}
+                onChangeText={setPastedText}
+                multiline
+                numberOfLines={6}
+                textAlignVertical="top"
+              />
+
+              <View style={{ height: 16 }} />
+
+              <ScalePressable
+                scaleTo={0.97}
+                haptic="medium"
+                style={[styles.primaryButton, { backgroundColor: theme.primary }]}
+                onPress={handleParsePastedSms}
+                disabled={isScanning}>
+                {isScanning ? (
+                  <ActivityIndicator color="#FFFFFF" />
+                ) : (
+                  <>
+                    <Ionicons name="flash-outline" size={20} color="#FFFFFF" style={{ marginRight: 8 }} />
+                    <ThemedText style={styles.primaryButtonText}>Parse & Preview SMS</ThemedText>
+                  </>
+                )}
+              </ScalePressable>
+            </ScrollView>
+          )
         ) : (
           /* Results Review Screen */
           <View style={styles.resultsContainer}>
@@ -235,44 +395,68 @@ export function SmsReviewModal({ visible, onClose }: SmsReviewModalProps) {
             <View style={[styles.summaryBar, { backgroundColor: theme.card, borderColor: theme.border }]}>
               <View style={styles.summaryInfo}>
                 <ThemedText style={styles.summaryCount}>
-                  {candidates.length} New Transactions
+                  {candidates.length} New
                 </ThemedText>
-                {duplicateCount > 0 && (
-                  <ThemedText style={styles.duplicateLabel} themeColor="textSecondary">
-                    ({duplicateCount} existing ignored)
-                  </ThemedText>
+                {duplicates.length > 0 && (
+                  <Pressable
+                    style={[
+                      styles.duplicateBadgeButton,
+                      { backgroundColor: showDuplicates ? '#F59E0B20' : theme.background },
+                    ]}
+                    onPress={() => setShowDuplicates((prev) => !prev)}>
+                    <ThemedText
+                      style={[
+                        styles.duplicateBadgeText,
+                        { color: showDuplicates ? '#D97706' : theme.textSecondary },
+                      ]}>
+                      {showDuplicates ? 'Hide Filtered' : `+${duplicates.length} Filtered`}
+                    </ThemedText>
+                  </Pressable>
                 )}
               </View>
-              {candidates.length > 0 && (
+              {displayList.length > 0 && (
                 <Pressable onPress={toggleSelectAll} style={styles.selectAllButton}>
                   <ThemedText style={[styles.selectAllText, { color: theme.primary }]}>
-                    {selectedIds.size === candidates.length ? 'Deselect All' : 'Select All'}
+                    {selectedIds.size === displayList.length ? 'Deselect All' : 'Select All'}
                   </ThemedText>
                 </Pressable>
               )}
             </View>
 
-            {candidates.length === 0 ? (
+            {displayList.length === 0 ? (
               <View style={styles.emptyContainer}>
                 <Ionicons name="checkmark-circle-outline" size={48} color={theme.textSecondary} />
                 <ThemedText style={styles.emptyTitle}>All Caught Up!</ThemedText>
                 <ThemedText style={styles.emptySubtitle} themeColor="textSecondary">
-                  No unrecorded bank transactions found in the last {daysBack} days.
+                  {duplicates.length > 0
+                    ? `Found ${duplicates.length} transactions, but they are already recorded in SpendWise.`
+                    : 'No unrecorded bank transactions found.'}
                 </ThemedText>
+                {duplicates.length > 0 && (
+                  <Pressable
+                    style={[styles.secondaryButton, { borderColor: theme.primary, marginTop: 14 }]}
+                    onPress={() => setShowDuplicates(true)}>
+                    <ThemedText style={[styles.secondaryButtonText, { color: theme.primary }]}>
+                      View Filtered Items ({duplicates.length})
+                    </ThemedText>
+                  </Pressable>
+                )}
                 <Pressable
-                  style={[styles.secondaryButton, { borderColor: theme.border, marginTop: 16 }]}
+                  style={[styles.secondaryButton, { borderColor: theme.border, marginTop: 10 }]}
                   onPress={() => setHasScanned(false)}>
-                  <ThemedText style={styles.secondaryButtonText}>Scan Again</ThemedText>
+                  <ThemedText style={styles.secondaryButtonText}>Scan or Paste Again</ThemedText>
                 </Pressable>
               </View>
             ) : (
               <FlatList
-                data={candidates}
+                data={displayList}
                 keyExtractor={(item) => item.id}
-                contentContainerStyle={{ paddingBottom: 100 }}
+                contentContainerStyle={{ paddingBottom: 120 }}
                 renderItem={({ item }) => {
                   const isSelected = selectedIds.has(item.id);
                   const isExpense = item.type === 'expense';
+                  const isDupe = item.isDuplicate;
+
                   return (
                     <ScalePressable
                       scaleTo={0.98}
@@ -281,7 +465,7 @@ export function SmsReviewModal({ visible, onClose }: SmsReviewModalProps) {
                         styles.transactionRow,
                         {
                           backgroundColor: theme.card,
-                          borderColor: isSelected ? theme.primary : theme.border,
+                          borderColor: isSelected ? theme.primary : isDupe ? '#F59E0B60' : theme.border,
                         },
                       ]}
                       onPress={() => toggleSelect(item.id)}>
@@ -308,6 +492,13 @@ export function SmsReviewModal({ visible, onClose }: SmsReviewModalProps) {
                               {item.bankName} {item.accountLast4 ? `*${item.accountLast4}` : ''}
                             </ThemedText>
                           </View>
+                          {isDupe && (
+                            <View style={[styles.bankBadge, { backgroundColor: '#F59E0B20' }]}>
+                              <ThemedText style={[styles.badgeText, { color: '#D97706' }]}>
+                                Existing
+                              </ThemedText>
+                            </View>
+                          )}
                           {item.suggestedCategory && (
                             <View
                               style={[
@@ -343,7 +534,7 @@ export function SmsReviewModal({ visible, onClose }: SmsReviewModalProps) {
             )}
 
             {/* Bottom Actions */}
-            {candidates.length > 0 && (
+            {displayList.length > 0 && (
               <View style={[styles.footer, { backgroundColor: theme.card, borderTopColor: theme.border }]}>
                 <View style={styles.footerInfo}>
                   <ThemedText style={styles.footerLabel} themeColor="textSecondary">
@@ -420,9 +611,25 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderWidth: 1,
   },
-  preScanContainer: {
+  tabBar: {
+    flexDirection: 'row',
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  tabButton: {
     flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 13,
+  },
+  tabText: {
+    fontSize: 13,
+    fontFamily: FontFamily.semiBold,
+  },
+  preScanContainer: {
     padding: Spacing.four,
+    paddingBottom: 40,
   },
   infoCard: {
     padding: Spacing.four,
@@ -449,7 +656,7 @@ const styles = StyleSheet.create({
   },
   daysSelectorRow: {
     flexDirection: 'row',
-    gap: 12,
+    gap: 8,
   },
   dayPill: {
     flex: 1,
@@ -461,6 +668,37 @@ const styles = StyleSheet.create({
   dayPillText: {
     fontSize: 13,
     fontFamily: FontFamily.medium,
+  },
+  templateHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  sampleChipRow: {
+    flexDirection: 'row',
+    gap: 10,
+    flexWrap: 'wrap',
+  },
+  sampleChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  sampleChipText: {
+    fontSize: 12,
+    fontFamily: FontFamily.medium,
+  },
+  textAreaInput: {
+    borderRadius: 12,
+    borderWidth: 1,
+    padding: 12,
+    fontSize: 13,
+    fontFamily: FontFamily.regular,
+    minHeight: 110,
   },
   primaryButton: {
     flexDirection: 'row',
@@ -494,9 +732,14 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontFamily: FontFamily.bold,
   },
-  duplicateLabel: {
+  duplicateBadgeButton: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+  },
+  duplicateBadgeText: {
     fontSize: 12,
-    fontFamily: FontFamily.regular,
+    fontFamily: FontFamily.medium,
   },
   selectAllButton: {
     paddingVertical: 6,

@@ -36,7 +36,7 @@ export const smsSyncService = {
 
   async scanInbox(options?: { daysBack?: number; maxCount?: number }): Promise<SmsSyncScanResult> {
     const days = options?.daysBack ?? 30;
-    const maxCount = options?.maxCount ?? 200;
+    const maxCount = options?.maxCount ?? 500;
     const minDate = Date.now() - days * 24 * 60 * 60 * 1000;
 
     const moduleAvailable = isSmsReaderAvailable();
@@ -82,6 +82,57 @@ export const smsSyncService = {
     });
 
     // 4. Separate duplicates
+    const { unique, duplicates } = filterDuplicateTransactions(
+      parsedTransactions,
+      existingTransactions
+    );
+
+    return {
+      hasPermission: true,
+      permissionStatus: 'granted',
+      isModuleAvailable: true,
+      totalScanned: rawMessages.length,
+      totalParsed: parsedTransactions.length,
+      uniqueTransactions: unique,
+      duplicateTransactions: duplicates,
+    };
+  },
+
+  async parsePastedSms(rawText: string): Promise<SmsSyncScanResult> {
+    const trimmed = rawText.trim();
+    if (!trimmed) {
+      return {
+        hasPermission: true,
+        permissionStatus: 'granted',
+        isModuleAvailable: true,
+        totalScanned: 0,
+        totalParsed: 0,
+        uniqueTransactions: [],
+        duplicateTransactions: [],
+      };
+    }
+
+    // Split multi-line pasted text if user pasted multiple messages separated by blank lines
+    const lines = trimmed
+      .split(/\n\s*\n|\r\n\s*\r\n/)
+      .map((b) => b.trim())
+      .filter((b) => b.length > 10);
+
+    const rawMessages = (lines.length > 1 ? lines : [trimmed]).map((body, index) => ({
+      id: `pasted_${Date.now()}_${index}`,
+      address: 'PASTED-SMS',
+      body,
+      date: Date.now(),
+    }));
+
+    const parsedTransactions = parseSmsList(rawMessages);
+
+    // Fetch recent transactions (last 60 days) for deduplication
+    const minDate = Date.now() - 60 * 24 * 60 * 60 * 1000;
+    const existingTransactions = await TransactionRepository.getTransactions({
+      startDate: new Date(minDate).toISOString(),
+    });
+
     const { unique, duplicates } = filterDuplicateTransactions(
       parsedTransactions,
       existingTransactions

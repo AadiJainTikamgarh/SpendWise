@@ -75,7 +75,7 @@ export async function readInboxSms(options?: ReadSmsOptions): Promise<RawSmsMess
 
   try {
     const messages = await nativeModule.readSmsAsync({
-      maxCount: options?.maxCount ?? 150,
+      maxCount: options?.maxCount ?? 300,
       minDate: options?.minDate ?? 0,
     });
     return messages || [];

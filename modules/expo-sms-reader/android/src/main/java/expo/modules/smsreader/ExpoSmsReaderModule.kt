@@ -25,19 +25,40 @@ class ExpoSmsReaderModule : Module() {
       val minDate = (options["minDate"] as? Number)?.toLong() ?: 0L
 
       val smsList = mutableListOf<Map<String, Any>>()
-      val uri = Uri.parse("content://sms/inbox")
       val projection = arrayOf("_id", "address", "body", "date")
       val selection = if (minDate > 0) "date >= ?" else null
       val selectionArgs = if (minDate > 0) arrayOf(minDate.toString()) else null
-      val sortOrder = "date DESC LIMIT $maxCount"
+      val sortOrder = "date DESC"
 
-      val cursor = context.contentResolver.query(
-        uri,
-        projection,
-        selection,
-        selectionArgs,
-        sortOrder
-      )
+      // Query inbox first
+      var uri = Uri.parse("content://sms/inbox")
+      var cursor = try {
+        context.contentResolver.query(
+          uri,
+          projection,
+          selection,
+          selectionArgs,
+          sortOrder
+        )
+      } catch (e: Exception) {
+        null
+      }
+
+      // Fallback to content://sms if inbox returned null
+      if (cursor == null) {
+        uri = Uri.parse("content://sms")
+        cursor = try {
+          context.contentResolver.query(
+            uri,
+            projection,
+            selection,
+            selectionArgs,
+            sortOrder
+          )
+        } catch (e: Exception) {
+          null
+        }
+      }
 
       cursor?.use {
         val idIndex = it.getColumnIndex("_id")
@@ -45,7 +66,7 @@ class ExpoSmsReaderModule : Module() {
         val bodyIndex = it.getColumnIndex("body")
         val dateIndex = it.getColumnIndex("date")
 
-        while (it.moveToNext()) {
+        while (it.moveToNext() && smsList.size < maxCount) {
           val id = if (idIndex != -1) it.getString(idIndex) ?: "" else ""
           val address = if (addressIndex != -1) it.getString(addressIndex) ?: "" else ""
           val body = if (bodyIndex != -1) it.getString(bodyIndex) ?: "" else ""

@@ -1,4 +1,5 @@
 import { matchCategory } from '@/services/sms/category-matcher';
+import { parseSms } from '@/services/sms/sms-parser';
 import { TransactionSource, TransactionType } from '@/types/finance';
 import { rupeesToPaise } from '@/utils/money';
 
@@ -298,19 +299,64 @@ export function parseStatementOrReceipt(rawInput: string): ParsedStatementTransa
     if (csvResult.length > 0) return csvResult;
   }
 
+  // Try parsing as single bank SMS transaction
+  const singleSms = parseSms({
+    id: generateId(),
+    address: 'PASTED-SMS',
+    body: trimmed,
+    date: Date.now(),
+  });
+  if (singleSms) {
+    return [
+      {
+        id: generateId(),
+        amount: singleSms.amount,
+        type: singleSms.type,
+        title: singleSms.title,
+        categoryId: singleSms.categoryId,
+        date: singleSms.date,
+        notes: `SMS from ${singleSms.bankName}${singleSms.accountLast4 ? ` | A/C *${singleSms.accountLast4}` : ''}${singleSms.referenceNo ? ` | Ref: ${singleSms.referenceNo}` : ''}`,
+        referenceNo: singleSms.referenceNo,
+        source: 'sms',
+        rawLine: trimmed.slice(0, 200),
+      },
+    ];
+  }
+
   // Try parsing as single email receipt
   const receiptResult = parseEmailReceipt(trimmed);
   if (receiptResult) {
     return [receiptResult];
   }
 
-  // Fallback: check if each line is a receipt summary
+  // Fallback: check if each line is an SMS or receipt summary
   const lines = trimmed.split(/\r?\n/).filter((l) => l.trim().length > 10);
-  const multiReceipts: ParsedStatementTransaction[] = [];
+  const multiItems: ParsedStatementTransaction[] = [];
   for (const line of lines) {
+    const lineSms = parseSms({
+      id: generateId(),
+      address: 'PASTED-SMS',
+      body: line,
+      date: Date.now(),
+    });
+    if (lineSms) {
+      multiItems.push({
+        id: generateId(),
+        amount: lineSms.amount,
+        type: lineSms.type,
+        title: lineSms.title,
+        categoryId: lineSms.categoryId,
+        date: lineSms.date,
+        notes: `SMS from ${lineSms.bankName}${lineSms.accountLast4 ? ` | A/C *${lineSms.accountLast4}` : ''}${lineSms.referenceNo ? ` | Ref: ${lineSms.referenceNo}` : ''}`,
+        referenceNo: lineSms.referenceNo,
+        source: 'sms',
+        rawLine: line.slice(0, 200),
+      });
+      continue;
+    }
     const single = parseEmailReceipt(line);
-    if (single) multiReceipts.push(single);
+    if (single) multiItems.push(single);
   }
 
-  return multiReceipts;
+  return multiItems;
 }

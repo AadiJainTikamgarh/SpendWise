@@ -161,6 +161,10 @@ const STRICT_EXPENSE_PATTERNS = [
   /[0-9,]+(?:\.[0-9]{1,2})?\s*(?:rs\.?|inr|\u20B9)\.?\s*(?:(?:has|have)\s+been\s+|was\s+|is\s+)?(?:successfully\s+)?(?:paid|spent|transferred)\s+(?:to|at|for|via|on)\b/i,
   // Card used for purchase (e.g. "used for purchase of Rs 500", "used for Rs 1,499.00 at ZOMATO", "used at AMAZON for Rs 500")
   /\b(?:card\s+|onecard\s+)?used\s+(?:for\s+(?:purchase\s+of\s+)?(?:rs\.?|inr|\u20B9)?\s*[0-9,]+|at\s+[A-Za-z0-9._\s]+\s+for\s+(?:rs\.?|inr|\u20B9)?\s*[0-9,]+)/i,
+  // Cash withdrawal (e.g. "Cash withdrawal of Rs 2000", "withdrawal of Rs 500")
+  /\b(?:cash\s+)?withdrawal\s+(?:of\s+)?(?:rs\.?|inr|\u20B9)?\s*[0-9,]+/i,
+  // Debit of amount (e.g. "has a debit of Rs 500", "debit of Rs 250")
+  /\b(?:has\s+a\s+)?debit\s+of\s+(?:rs\.?|inr|\u20B9)?\s*[0-9,]+/i,
   // Transfer of amount
   /\btransfer\s+(?:of\s+)?(?:rs\.?|inr|\u20B9)?\s*[0-9,]+(?:\.[0-9]{1,2})?\s*(?:rs\.?|inr|\u20B9)?\s+to\b/i,
 ];
@@ -205,9 +209,9 @@ export function isAllowedSender(address: string, body: string): boolean {
     return false;
   }
 
-  // 4. Fallback: If address is a standard TRAI alphanumeric header and the body
-  // explicitly names a bank AND an account/card, allow
-  if (/[A-Za-z]/.test(cleanAddress) && detectBankName(address, body) !== 'Bank' && extractAccountLast4(body)) {
+  // 4. Fallback: If the body explicitly names a bank AND an account/card, allow
+  // (supports shortcodes, non-standard SMS delivery, and banks without circle prefix)
+  if (detectBankName(address, body) !== 'Bank' && extractAccountLast4(body)) {
     return true;
   }
 
@@ -250,11 +254,12 @@ export function hasTransactionAnchors(body: string): boolean {
   // 2. Reference / RRN / UPI ID anchor
   const hasReference =
     /(?:ref(?:erence)?\s*(?:no\.?)?|rrn|upi\s*ref|txn\s*(?:id|no)|transaction\s*id)\s*[:.]?\s*[0-9A-Za-z]{6,25}/i.test(body) ||
+    /\b(?:mb|imps|neft|rtgs)\s*[:.]?\s*[0-9A-Za-z]{6,25}/i.test(body) ||
     /\bupi\/[0-9]{8,18}\b/i.test(body);
 
   // 3. Balance statement anchor
   const hasBalance =
-    /\b(?:avl(?:able)?\s*bal|available\s*balance|bal\s*(?:is|inr|rs)|total\s*bal(?:ance)?)\b/i.test(body);
+    /\b(?:avl(?:able)?\s*bal|available\s*balance|bal\s*(?:is|inr|rs)|total\s*bal(?:ance)?|bal\s*(?:is\s*)?(?:rs\.?|inr|\u20B9)?\s*[0-9,.]+)/i.test(body);
 
   return hasAccount || hasReference || hasBalance;
 }
@@ -363,9 +368,14 @@ export function extractAmount(body: string): number | null {
 
 export function extractAccountLast4(body: string): string | undefined {
   const patterns = [
-    /(?:a\/c|acct|account|card)\s*(?:no\.?)?\s*(?:ending\s*)?[*Xx.]*(\d{3,4})/i,
-    /(?:ending\s*(?:with\s*)?)(\d{3,4})/i,
-    /(?:[*Xx]+|\.{2,})(\d{3,4})\b/,
+    // 1. Account with asterisks, X's, or dots before the last 3-4 digits: A/c *1650, A/c ...1650, Card XX5678
+    /(?:a\/c|acct|account|card)\s*(?:no\.?)?\s*(?:ending\s*)?[*Xx.]+(\d{3,4})\b/i,
+    // 2. Explicit "ending with" or "ending in"
+    /(?:ending\s*(?:with|in)?\s*[:.]?\s*)[*Xx.]*(\d{3,4})\b/i,
+    // 3. Masked digits anywhere in body: **1650, XX1650, ...1650
+    /(?:[*Xx]{2,}|\.{2,})(\d{3,4})\b/,
+    // 4. Account with digits: extract the LAST 3-4 digits of the numeric account string
+    /(?:a\/c|acct|account|card)\s*(?:no\.?)?\s*[:.]?\s*\d*?(\d{3,4})\b/i,
   ];
 
   for (const pattern of patterns) {
