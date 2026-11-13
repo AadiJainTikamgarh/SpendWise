@@ -2,8 +2,13 @@ import { rupeesToPaise } from '@/utils/money';
 import { RawSms, ParsedSmsTransaction } from './types';
 import { matchCategory } from './category-matcher';
 import { TransactionType } from '@/types/finance';
+import {
+  getBankNameFromTraiHeader,
+  isKnownTraiFinancialHeader,
+} from './bank-headers';
 
 const BANK_MAPPINGS: { pattern: RegExp; name: string }[] = [
+  // Public Sector Banks
   { pattern: /hdfc/i, name: 'HDFC Bank' },
   { pattern: /sbi|sbin/i, name: 'State Bank of India' },
   { pattern: /icici/i, name: 'ICICI Bank' },
@@ -12,28 +17,80 @@ const BANK_MAPPINGS: { pattern: RegExp; name: string }[] = [
   { pattern: /pnb|punjab national/i, name: 'Punjab National Bank' },
   { pattern: /bob|baroda/i, name: 'Bank of Baroda' },
   { pattern: /canara|cnrb/i, name: 'Canara Bank' },
+  { pattern: /union\s*bank|unionb|ubibnk/i, name: 'Union Bank of India' },
+  { pattern: /boi|boibnk|bank of india|bkidtx/i, name: 'Bank of India' },
+  { pattern: /indian\s*bank|indbnk|albkms/i, name: 'Indian Bank' },
+  { pattern: /central\s*bank|cbibnk|centbk/i, name: 'Central Bank of India' },
+  { pattern: /indian\s*overseas|iobbnk|iobsms/i, name: 'Indian Overseas Bank' },
+  { pattern: /uco\s*bank|ucobnk/i, name: 'UCO Bank' },
+  { pattern: /bank\s*of\s*maharashtra|bombnk|mahabk/i, name: 'Bank of Maharashtra' },
+  { pattern: /punjab\s*(&|and)\s*sind|psbbnk|psbsms/i, name: 'Punjab & Sind Bank' },
+
+  // Private Sector Banks
   { pattern: /indus/i, name: 'IndusInd Bank' },
   { pattern: /yes\s*bank|yesbnk/i, name: 'Yes Bank' },
   { pattern: /idfc/i, name: 'IDFC FIRST Bank' },
-  { pattern: /paytm/i, name: 'Paytm Payments Bank' },
   { pattern: /federal/i, name: 'Federal Bank' },
-  { pattern: /union\s*bank|unionb/i, name: 'Union Bank' },
   { pattern: /rbl/i, name: 'RBL Bank' },
-  { pattern: /aubank|au\s*small/i, name: 'AU Small Finance Bank' },
-  { pattern: /equitas/i, name: 'Equitas Small Finance Bank' },
-  { pattern: /ujjivan/i, name: 'Ujjivan Small Finance Bank' },
-  { pattern: /postbk|ippb/i, name: 'India Post Payments Bank' },
   { pattern: /bandhan/i, name: 'Bandhan Bank' },
+  { pattern: /south\s*indian\s*bank|siblbn|sibbnk/i, name: 'South Indian Bank' },
+  { pattern: /city\s*union|cubbnk/i, name: 'City Union Bank' },
+  { pattern: /karur\s*vysya|kvbank/i, name: 'Karur Vysya Bank' },
+  { pattern: /karnataka\s*bank|ktkbnk/i, name: 'Karnataka Bank' },
+  { pattern: /idbi/i, name: 'IDBI Bank' },
+  { pattern: /tamilnad\s*mercantile|tmblbk/i, name: 'Tamilnad Mercantile Bank' },
+  { pattern: /csb\s*bank|csbbnk/i, name: 'CSB Bank' },
+  { pattern: /dcb\s*bank|dcbbnk/i, name: 'DCB Bank' },
+  { pattern: /dhanlaxmi|dlxbnk/i, name: 'Dhanlaxmi Bank' },
+  { pattern: /nainital\s*bank|ntbl/i, name: 'Nainital Bank' },
+  { pattern: /jammu\s*(&|and)\s*kashmir|jkbank/i, name: 'Jammu & Kashmir Bank' },
+
+  // Foreign Banks
   { pattern: /citi/i, name: 'Citi Bank' },
   { pattern: /hsbc/i, name: 'HSBC' },
   { pattern: /scb|standard\s*chartered/i, name: 'Standard Chartered' },
+  { pattern: /deutsche|deustb/i, name: 'Deutsche Bank' },
+  { pattern: /dbs|digibank/i, name: 'DBS Bank' },
+  { pattern: /barclays|barc/i, name: 'Barclays' },
+
+  // Small Finance Banks
+  { pattern: /aubank|au\s*small/i, name: 'AU Small Finance Bank' },
+  { pattern: /equitas/i, name: 'Equitas Small Finance Bank' },
+  { pattern: /ujjivan/i, name: 'Ujjivan Small Finance Bank' },
+  { pattern: /jana\s*small|janabk/i, name: 'Jana Small Finance Bank' },
+  { pattern: /utkarsh/i, name: 'Utkarsh Small Finance Bank' },
+  { pattern: /suryoday/i, name: 'Suryoday Small Finance Bank' },
+  { pattern: /esaf/i, name: 'ESAF Small Finance Bank' },
+  { pattern: /capital\s*small|csfbkn/i, name: 'Capital Small Finance Bank' },
+  { pattern: /fincare|fincsf/i, name: 'Fincare Small Finance Bank' },
+  { pattern: /shivalik|shivlk/i, name: 'Shivalik Small Finance Bank' },
+  { pattern: /unity\s*small|unityb/i, name: 'Unity Small Finance Bank' },
+  { pattern: /north\s*east\s*small|nesfb/i, name: 'North East Small Finance Bank' },
+
+  // Payments Banks
+  { pattern: /postbk|ippb/i, name: 'India Post Payments Bank' },
+  { pattern: /paytm/i, name: 'Paytm Payments Bank' },
+  { pattern: /airtel\s*payment|airbnk|airtelpb/i, name: 'Airtel Payments Bank' },
+  { pattern: /fino\s*payment|finopb/i, name: 'Fino Payments Bank' },
+  { pattern: /jio\s*payment|jiopbk/i, name: 'Jio Payments Bank' },
+  { pattern: /nsdl\s*payment|nsdlpb/i, name: 'NSDL Payments Bank' },
+
+  // Credit Cards & Fintech
+  { pattern: /onecard|one\s*card|fplcrd/i, name: 'OneCard' },
+  { pattern: /uni\s*card|unicrd/i, name: 'Uni Cards' },
+  { pattern: /slice/i, name: 'Slice' },
+  { pattern: /jupiter|jupitr/i, name: 'Jupiter' },
+  { pattern: /fi\s*money|fibank/i, name: 'Fi Money' },
+  { pattern: /cred/i, name: 'CRED' },
   { pattern: /phonepe/i, name: 'PhonePe' },
   { pattern: /gpay|google\s*pay/i, name: 'Google Pay' },
   { pattern: /bhim/i, name: 'BHIM UPI' },
-  { pattern: /cred/i, name: 'CRED' },
-  { pattern: /slice/i, name: 'Slice' },
-  { pattern: /jupiter/i, name: 'Jupiter' },
-  { pattern: /fi\s*money|fibank/i, name: 'Fi Money' },
+  { pattern: /amazon\s*pay|amzpay/i, name: 'Amazon Pay' },
+  { pattern: /bajaj\s*fin|bajajf/i, name: 'Bajaj Finserv' },
+  { pattern: /navi/i, name: 'Navi' },
+  { pattern: /mobikw/i, name: 'MobiKwik' },
+  { pattern: /freech/i, name: 'Freecharge' },
+  { pattern: /tata\s*pay|tatapay|tatapy/i, name: 'Tata Pay' },
 ];
 
 // Personal phone numbers (e.g. 10 to 15 digits) are never official bank SMS senders
@@ -41,11 +98,11 @@ const PERSONAL_NUMBER_REGEX = /^(?:\+|00)?[0-9]{10,15}$/;
 
 // Known marketing, retail, entertainment, and non-financial senders
 const PROMOTIONAL_SENDER_REGEX =
-  /(?:swiggy|zomato|zepto|blinkit|bigbsk|dunzo|flipkt|amazon|myntra|ajio|meesho|nykaa|tata|lenskt|domino|pizza|kfc|mcdon|rummy|poker|dream11|winzo|casino|jio|airtel|vodafone|idea|bsnl|actfib|hathway|uber|ola|rapido|makemytrip|goibibo|yatra|indigo|spicejet|irctc|bms|bookmyshow|hotstar|netflix|prime|loan|kredit|cashe|dhani|moneyl)/i;
+  /(?:swiggy|zomato|zepto|blinkit|bigbsk|dunzo|flipkt|amazon|myntra|ajio|meesho|nykaa|lenskt|domino|pizza|kfc|mcdon|rummy|poker|dream11|winzo|casino|vodafone|idea|bsnl|actfib|hathway|uber|ola|rapido|makemytrip|goibibo|yatra|indigo|spicejet|irctc|bms|bookmyshow|hotstar|netflix|prime|loan|kredit|cashe|dhani|moneyl)/i;
 
 // Verified bank and UPI sender tokens
 const FINANCIAL_SENDER_REGEX =
-  /(?:hdfc|sbi|sbin|icici|axis|kotak|pnb|bob|canara|cnrb|indus|yes|idfc|fed|union|rbl|iob|uco|cbi|bom|bandhan|aubank|equitas|ujjivan|ippb|postbk|paytm|gpay|phonepe|bhim|cred|slice|jupit|fibank|mobikw|amex|rupay|visa)/i;
+  /(?:hdfc|sbi|sbin|icici|axis|kotak|pnb|bob|canara|cnrb|indus|yes|idfc|fed|union|rbl|boi|bkld|indbnk|cbi|centbk|iob|uco|bom|mahabk|psb|bandhan|aubank|equitas|ujjivan|jana|utkarsh|suryod|esaf|csfb|fincar|shivlk|unity|nesfb|ippb|postbk|paytm|airbnk|airtelpb|finopb|jiopbk|nsdlpb|gpay|phonepe|bhim|cred|slice|jupit|fibank|onecrd|fplcrd|unicrd|mobikw|freech|amzpay|bajaj|navi|tatapay|tatapy|amex|rupay|visa)/i;
 
 // Comprehensive negative keywords for promotional, bill reminders, failed transactions, and OTPs
 const IGNORE_PATTERNS = [
@@ -102,8 +159,8 @@ const STRICT_EXPENSE_PATTERNS = [
   /(?:rs\.?|inr|\u20B9)\.?\s*[0-9,]+(?:\.[0-9]{1,2})?\s*(?:(?:has|have)\s+been\s+|was\s+|is\s+)?(?:successfully\s+)?(?:paid|spent|transferred)\s+(?:to|at|for|via|on)\b/i,
   // Postfix currency amount before paid/spent/transferred (e.g. "500.00 INR was spent at")
   /[0-9,]+(?:\.[0-9]{1,2})?\s*(?:rs\.?|inr|\u20B9)\.?\s*(?:(?:has|have)\s+been\s+|was\s+|is\s+)?(?:successfully\s+)?(?:paid|spent|transferred)\s+(?:to|at|for|via|on)\b/i,
-  // Card used for purchase
-  /\b(?:card\s+)?used\s+(?:for\s+purchase\s+of|at\s+[A-Za-z0-9._\s]+\s+for)\s+(?:rs\.?|inr|\u20B9)?\s*[0-9,]+/i,
+  // Card used for purchase (e.g. "used for purchase of Rs 500", "used for Rs 1,499.00 at ZOMATO", "used at AMAZON for Rs 500")
+  /\b(?:card\s+|onecard\s+)?used\s+(?:for\s+(?:purchase\s+of\s+)?(?:rs\.?|inr|\u20B9)?\s*[0-9,]+|at\s+[A-Za-z0-9._\s]+\s+for\s+(?:rs\.?|inr|\u20B9)?\s*[0-9,]+)/i,
   // Transfer of amount
   /\btransfer\s+(?:of\s+)?(?:rs\.?|inr|\u20B9)?\s*[0-9,]+(?:\.[0-9]{1,2})?\s*(?:rs\.?|inr|\u20B9)?\s+to\b/i,
 ];
@@ -136,14 +193,16 @@ export function isAllowedSender(address: string, body: string): boolean {
     return false;
   }
 
-  // 2. Reject known promo / commerce / retail senders
-  if (PROMOTIONAL_SENDER_REGEX.test(cleanAddress)) {
-    return false;
+  // 2. Allow if it matches a registered TRAI financial header or recognized financial sender token.
+  // Checking this prior to promotional filtering ensures legitimate institutions (e.g. AIRBNK, AIRTELPB, TATAPAY)
+  // are never blocked by generic brand substrings in promotional regex.
+  if (isKnownTraiFinancialHeader(cleanAddress) || FINANCIAL_SENDER_REGEX.test(cleanAddress)) {
+    return true;
   }
 
-  // 3. If it contains a recognized financial sender code, allow
-  if (FINANCIAL_SENDER_REGEX.test(cleanAddress)) {
-    return true;
+  // 3. Reject known promo / commerce / retail senders
+  if (PROMOTIONAL_SENDER_REGEX.test(cleanAddress)) {
+    return false;
   }
 
   // 4. Fallback: If address is a standard TRAI alphanumeric header and the body
@@ -156,6 +215,13 @@ export function isAllowedSender(address: string, body: string): boolean {
 }
 
 export function detectBankName(address: string, body: string): string {
+  // 1. Check exact official TRAI DLT Header registry
+  const traiBank = getBankNameFromTraiHeader(address);
+  if (traiBank) {
+    return traiBank;
+  }
+
+  // 2. Fall back to combined address + body regex patterns
   const combined = `${address} ${body}`;
   for (const item of BANK_MAPPINGS) {
     if (item.pattern.test(combined)) {
@@ -233,6 +299,8 @@ const CONTEXTUAL_AMOUNT_PATTERNS: RegExp[] = [
   /([0-9,]+(?:\.[0-9]{1,2})?)\s*(?:rs\.?|inr|\u20B9)\.?\s*(?:(?:has|have)\s+been\s+|was\s+|is\s+)?(?:successfully\s+)?(?:debited|deducted|withdrawn|dr\.?|paid|spent|transferred|credited|deposited|cr\.?)/i,
   // 7. Transaction verb preceding postfix currency amount: "debited by 350.00 INR", "credited with 500.00 INR", "paid 120.00 INR"
   /(?:debited|deducted|withdrawn|dr\.?|paid|spent|sent|credited|deposited|cr\.?)\s+(?:by|with|for|to)?\s*([0-9,]+(?:\.[0-9]{1,2})?)\s*(?:rs\.?|inr|\u20B9)/i,
+  // 8. Card used for amount: "used for Rs 1,499.00", "used for INR 500", "used for purchase of Rs 250"
+  /(?:used\s+for(?:\s+purchase\s+of)?)\s+(?:(?:rs\.?|inr|\u20B9)\.?\s*)?([0-9,]+(?:\.[0-9]{1,2})?)/i,
 ];
 
 export function extractAmount(body: string): number | null {
@@ -321,7 +389,7 @@ export function extractMerchant(body: string, type: TransactionType): string {
     /(?:to|at|info\/)\s+([A-Za-z0-9._&'\-\s]{2,30}?)(?:\s+(?:on|via|ref|upi|avl|bal|not|if|using|\.|\,)|$)/i,
     /(?:for\s+(?:purchase of\s+)?)([A-Za-z0-9._&'\-\s]{2,30}?)(?:\s+(?:on|via|ref|upi|avl|bal|\.|\,)|$)/i,
     /(?:vpa\s+)([A-Za-z0-9._@\-]+)/i,
-    /(?:upi\/[0-9]+\/)([A-Za-z0-9._\s]+)/i,
+    /(?:upi\/[0-9]+\/)([A-Za-z0-9._&'\-\s]{2,30}?)(?=[,.\s]+(?:bal|avl|on|via|ref|upi|not)|[.]|$)/i,
   ];
 
   for (const pattern of merchantPatterns) {

@@ -1,4 +1,9 @@
-import { parseSms, parseSmsList } from '../sms-parser';
+import { parseSms, parseSmsList, isAllowedSender } from '../sms-parser';
+import {
+  extractTraiCoreHeader,
+  getBankNameFromTraiHeader,
+  isKnownTraiFinancialHeader,
+} from '../bank-headers';
 import { RawSms } from '../types';
 
 export interface TestResult {
@@ -286,8 +291,64 @@ export function runParserTests(): TestResult {
       expectedAmountPaise: 500,
       expectedType: 'expense',
       expectedAccountLast4: '1650',
-      expectedBankName: 'Union Bank',
+      expectedBankName: 'Union Bank of India',
       expectedTitle: 'Ver S',
+    },
+    {
+      name: 'Airtel Payments Bank Debit (AD-AIRBNK-T)',
+      sms: {
+        id: 'airbnk-debit',
+        address: 'AD-AIRBNK-T',
+        body: 'Dear Customer, your Airtel Payments Bank A/C *4321 is debited by Rs.299.00 on 12-Nov-26 for Netflix. Avl Bal: Rs 1,450.00.',
+        date: 1794477600000,
+      },
+      expectedAmountPaise: 29900,
+      expectedType: 'expense',
+      expectedAccountLast4: '4321',
+      expectedBankName: 'Airtel Payments Bank',
+      expectedTitle: 'Netflix',
+    },
+    {
+      name: 'OneCard Credit Card Purchase (VM-ONECRD-T)',
+      sms: {
+        id: 'onecrd-purchase',
+        address: 'VM-ONECRD-T',
+        body: 'Your OneCard ending 9988 was used for Rs 1,499.00 at ZOMATO on 12-Nov-26. Avl Limit: Rs 48,500.00.',
+        date: 1794477600000,
+      },
+      expectedAmountPaise: 149900,
+      expectedType: 'expense',
+      expectedAccountLast4: '9988',
+      expectedBankName: 'OneCard',
+      expectedTitle: 'Zomato',
+    },
+    {
+      name: 'Canara Bank UPI Debit (BP-CANBNK-S)',
+      sms: {
+        id: 'canara-debit',
+        address: 'BP-CANBNK-S',
+        body: 'Canara Bank A/c 5432 debited with Rs 1,200.00 on 12-Nov-2026 by UPI to Swiggy. Ref 431602819231. Bal Rs 12,500.00',
+        date: 1794477600000,
+      },
+      expectedAmountPaise: 120000,
+      expectedType: 'expense',
+      expectedAccountLast4: '5432',
+      expectedBankName: 'Canara Bank',
+      expectedTitle: 'Swiggy',
+    },
+    {
+      name: 'Bank of India UPI Debit (AD-BOISMS-T)',
+      sms: {
+        id: 'boi-debit',
+        address: 'AD-BOISMS-T',
+        body: 'Bank of India A/c ending 8765 debited by Rs 350.00 on 11-Nov-26. Info: UPI/331234567890/Zomato. Avl Bal: Rs 4,200.00',
+        date: 1794477600000,
+      },
+      expectedAmountPaise: 35000,
+      expectedType: 'expense',
+      expectedAccountLast4: '8765',
+      expectedBankName: 'Bank of India',
+      expectedTitle: 'Zomato',
     },
   ];
 
@@ -654,9 +715,70 @@ export function runParserTests(): TestResult {
     successes++;
   }
 
+  // 4. Verify TRAI DLT SMS Header Registry, Normalizer, and Sender Allowlist
+  const headerTestVectors: {
+    input: string;
+    expectedCore: string;
+    expectedBank: string | null;
+    isFinancial: boolean;
+  }[] = [
+    { input: 'JK-UNIONB-S', expectedCore: 'UNIONB', expectedBank: 'Union Bank of India', isFinancial: true },
+    { input: 'VM-HDFCBK-T', expectedCore: 'HDFCBK', expectedBank: 'HDFC Bank', isFinancial: true },
+    { input: 'AD-SBINBS-T', expectedCore: 'SBINBS', expectedBank: 'State Bank of India', isFinancial: true },
+    { input: 'AX-ICICIB', expectedCore: 'ICICIB', expectedBank: 'ICICI Bank', isFinancial: true },
+    { input: 'BP-CANBNK-S', expectedCore: 'CANBNK', expectedBank: 'Canara Bank', isFinancial: true },
+    { input: 'AD-BOISMS-T', expectedCore: 'BOISMS', expectedBank: 'Bank of India', isFinancial: true },
+    { input: 'AD-AIRBNK-T', expectedCore: 'AIRBNK', expectedBank: 'Airtel Payments Bank', isFinancial: true },
+    { input: 'VM-ONECRD-T', expectedCore: 'ONECRD', expectedBank: 'OneCard', isFinancial: true },
+    { input: 'BW-CRED', expectedCore: 'CRED', expectedBank: 'CRED', isFinancial: true },
+    { input: 'DM-YESBNK', expectedCore: 'YESBNK', expectedBank: 'Yes Bank', isFinancial: true },
+    { input: 'AD-JUPITR', expectedCore: 'JUPITR', expectedBank: 'Jupiter', isFinancial: true },
+    { input: 'VK-PAYTMB', expectedCore: 'PAYTMB', expectedBank: 'Paytm Payments Bank', isFinancial: true },
+  ];
+
+  for (const hv of headerTestVectors) {
+    const extracted = extractTraiCoreHeader(hv.input);
+    if (extracted !== hv.expectedCore) {
+      failures.push(
+        `[FAILED] extractTraiCoreHeader("${hv.input}"): expected "${hv.expectedCore}", got "${extracted}".`
+      );
+    } else {
+      successes++;
+    }
+
+    const bankName = getBankNameFromTraiHeader(hv.input);
+    if (bankName !== hv.expectedBank) {
+      failures.push(
+        `[FAILED] getBankNameFromTraiHeader("${hv.input}"): expected "${hv.expectedBank}", got "${bankName}".`
+      );
+    } else {
+      successes++;
+    }
+
+    const isFin = isKnownTraiFinancialHeader(hv.input);
+    if (isFin !== hv.isFinancial) {
+      failures.push(
+        `[FAILED] isKnownTraiFinancialHeader("${hv.input}"): expected ${hv.isFinancial}, got ${isFin}.`
+      );
+    } else {
+      successes++;
+    }
+
+    const allowed = isAllowedSender(hv.input, 'Sample transactional text');
+    if (allowed !== hv.isFinancial) {
+      failures.push(
+        `[FAILED] isAllowedSender("${hv.input}"): expected ${hv.isFinancial}, got ${allowed}.`
+      );
+    } else {
+      successes++;
+    }
+  }
+
+  const totalWithHeaders = total + headerTestVectors.length * 4;
+
   return {
     passed: failures.length === 0,
-    total,
+    total: totalWithHeaders,
     successes,
     failures,
   };
